@@ -1,0 +1,20 @@
+# Terraform state — NEVER commit, contains secrets inline
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl.bak
+crash.log
+crash.*.log
+
+# Real tfvars (concrete values — keep committed only the *.example file)
+*.auto.tfvars
+!*.auto.tfvars.example
+*.tfvars
+!*.tfvars.example
+
+# Credentials — any *.pem / key files that end up here by accident
+*.pem
+*.key
+service-account*.json
+credentials*.json

@@ -1,0 +1,1480 @@
+{
+  "nebius_compute_v1_gpu_cluster": {
+    "created_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was created.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTH",
+      "type": "string"
+    },
+    "id": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "Identifier for the resource, unique for its resource type.",
+      "type": "string"
+    },
+    "infiniband_fabric": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": ":     The identifier of the physical InfiniBand fabric to connect GPU instances to.    For details, see https://docs.nebius.com/compute/clusters/gpu#fabrics",
+      "type": "string"
+    },
+    "labels": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Labels associated with the resource.",
+      "type": [
+        "map",
+        "string"
+      ]
+    },
+    "metadata": {
+      "required": false,
+      "optional": true,
+      "computed": true,
+      "description": ":     #### Inner value description        Common resource metadata.",
+      "type": "nested",
+      "nesting_mode": "single"
+    },
+    "name": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Human readable name for the resource.",
+      "type": "string"
+    },
+    "parent_id": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": "Identifier of the parent resource to which the resource belongs.",
+      "type": "string"
+    },
+    "resource_version": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Version of the resource for safe concurrent modifications and consistent reads.    Positive and monotonically increases on each resource spec change (but *not* on each change of the    resource'",
+      "type": "number"
+    },
+    "status": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "infiniband_topology_path": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "instances": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": "",
+              "type": "nested",
+              "nesting_mode": "list",
+              "attributes": {
+                "instance_id": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": "",
+                  "type": "string"
+                },
+                "path": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": "",
+                  "type": [
+                    "list",
+                    "string"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "instances": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": [
+            "list",
+            "string"
+          ]
+        },
+        "reconciling": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "Indicates whether there is an ongoing operation",
+          "type": "bool"
+        }
+      }
+    },
+    "updated_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was last updated.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM",
+      "type": "string"
+    }
+  },
+  "nebius_mk8s_v1_cluster": {
+    "control_plane": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": "",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "audit_logs": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Specify configuration of the pushing k8s audit logs into service logs and show it in the UI.    By default cluster will be created without it.",
+          "type": "nested",
+          "nesting_mode": "single"
+        },
+        "endpoints": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": "Specification of endpoints of cluster control plane.",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "public_endpoint": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "Public endpoint specification. When set, a public endpoint is created.",
+              "type": "nested",
+              "nesting_mode": "single"
+            }
+          }
+        },
+        "etcd_cluster_size": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Number of instances in etcd cluster.    3 by default.    Control plane with `etcd_cluster_size: 3` called \"Highly Available\" (\"HA\"), because it's Kubernetes API    will be available despite a fa",
+          "type": "number"
+        },
+        "karpenter": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Enables installation of the Karpenter inside a cluster.    Karpenter will be installed as a helm chart inside cluster    so it requires creation of at least one CPU public node group.        Ple",
+          "type": "nested",
+          "nesting_mode": "single"
+        },
+        "subnet_id": {
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "description": ":     Nebius VPC Subnet ID where control plane instances will be located.    Also will be default NodeGroup subnet.",
+          "type": "string"
+        },
+        "version": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Desired Kubernetes version of the cluster. For now only acceptable format is    `<major>.<minor>` like \"1.31\". Option for patch version update will be added later.",
+          "type": "string"
+        }
+      }
+    },
+    "created_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was created.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTH",
+      "type": "string"
+    },
+    "id": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "Identifier for the resource, unique for its resource type.",
+      "type": "string"
+    },
+    "kube_network": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Defines kubernetes network configuration, like IP allocation.",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "service_cidrs": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     CIDR blocks for Service ClusterIP allocation.    For now, only one value is supported.    Must be a valid CIDR block or prefix length.    In case of prefix length, certain CIDR is auto allocated",
+          "type": [
+            "list",
+            "string"
+          ]
+        }
+      }
+    },
+    "labels": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Labels associated with the resource.",
+      "type": [
+        "map",
+        "string"
+      ]
+    },
+    "metadata": {
+      "required": false,
+      "optional": true,
+      "computed": true,
+      "description": ":     #### Inner value description        Common resource metadata.",
+      "type": "nested",
+      "nesting_mode": "single"
+    },
+    "name": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Human readable name for the resource.",
+      "type": "string"
+    },
+    "parent_id": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": "Identifier of the parent resource to which the resource belongs.",
+      "type": "string"
+    },
+    "resource_version": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Version of the resource for safe concurrent modifications and consistent reads.    Positive and monotonically increases on each resource spec change (but *not* on each change of the    resource'",
+      "type": "number"
+    },
+    "status": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "control_plane": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "auth": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": "",
+              "type": "nested",
+              "nesting_mode": "single",
+              "attributes": {
+                "cluster_ca_certificate": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": "PEM with the Cluster Certificate Authority, that must be used for TLS connection to Kubernetes API.",
+                  "type": "string"
+                }
+              }
+            },
+            "endpoints": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": ":     #### Inner value description        Endpoints of Kubernetes control plane. Kubernetes API can be accessed at `https://endpoint/`.",
+              "type": "nested",
+              "nesting_mode": "single",
+              "attributes": {
+                "private_endpoint": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": "DNS name or IP address accessible from the user VPC.",
+                  "type": "string"
+                },
+                "public_endpoint": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": "DNS name or IP address accessible from the Internet.",
+                  "type": "string"
+                }
+              }
+            },
+            "etcd_cluster_size": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": "Number of instances in etcd cluster.",
+              "type": "number"
+            },
+            "version": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": ":     Actual Kubernetes and configuration version.    Version has format `<major>.<minor>.<patch>-nebius-cp.<infra_version>` like    \"1.30.0-nebius-cp.3\", where `<major>.<minor>.<patch>` is Kubernetes",
+              "type": "string"
+            }
+          }
+        },
+        "reconciling": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "Show that changes are in flight",
+          "type": "bool"
+        },
+        "state": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     #### Supported values        Possible values:        - `STATE_UNSPECIFIED`    - `PROVISIONING`    - `RUNNING`    - `DELETING`",
+          "type": "string"
+        }
+      }
+    },
+    "updated_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was last updated.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM",
+      "type": "string"
+    }
+  },
+  "nebius_mk8s_v1_node_group": {
+    "auto_repair": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Parameters for nodes auto repair.",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "conditions": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": "Conditions that determine whether a node should be auto repaired.",
+          "type": "nested",
+          "nesting_mode": "list",
+          "attributes": {
+            "disabled": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": ":     When true, disables the default auto-repair condition rules.        *Cannot be set alongside timeout.*",
+              "type": "bool"
+            },
+            "status": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": ":     Node condition status.        #### Supported values        Possible values:        - `CONDITION_STATUS_UNSPECIFIED`    - `TRUE`    - `FALSE`    - `UNKNOWN`",
+              "type": "string"
+            },
+            "timeout": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": ":     The duration after which the node is automatically repaired if the condition remains in the specified status.        Duration as a string: possibly signed sequence of decimal numbers, each with",
+              "type": "string"
+            },
+            "type": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": "Node condition type.",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "autoscaling": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Enables [Kubernetes Cluster Autoscaler](https://github.com/kubernetes/autoscaler/tree/master/cluster-autoscaler)    for that NodeGroup, and defines autoscaling parameters.        *Cannot be set",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "max_node_count": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": "",
+          "type": "number"
+        },
+        "min_node_count": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": "",
+          "type": "number"
+        }
+      }
+    },
+    "created_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was created.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTH",
+      "type": "string"
+    },
+    "fixed_node_count": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Number of nodes in the group. Can be changed manually at any time.        *Cannot be set alongside autoscaling.*",
+      "type": "number"
+    },
+    "id": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "Identifier for the resource, unique for its resource type.",
+      "type": "string"
+    },
+    "labels": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Labels associated with the resource.",
+      "type": [
+        "map",
+        "string"
+      ]
+    },
+    "metadata": {
+      "required": false,
+      "optional": true,
+      "computed": true,
+      "description": ":     #### Inner value description        Common resource metadata.        The parent_id is an ID of Cluster",
+      "type": "nested",
+      "nesting_mode": "single"
+    },
+    "name": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Human readable name for the resource.",
+      "type": "string"
+    },
+    "parent_id": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": "Identifier of the parent resource to which the resource belongs.",
+      "type": "string"
+    },
+    "resource_version": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Version of the resource for safe concurrent modifications and consistent reads.    Positive and monotonically increases on each resource spec change (but *not* on each change of the    resource'",
+      "type": "number"
+    },
+    "status": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "events": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     #### Inner value description        A resource event that has occurred (more or less in the same way) multiple times across a service-defined aggregation interval",
+          "type": "nested",
+          "nesting_mode": "list",
+          "attributes": {
+            "first_occurred_at": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": ":     Time of the first occurrence of a recurrent event        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTHH:",
+              "type": "string"
+            },
+            "last_occurrence": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": ":     Last occurrence of a recurrent event        #### Inner value description        Represents an API Resource-related event which is potentially important to the end-user. What exactly constitutes",
+              "type": "nested",
+              "nesting_mode": "single",
+              "attributes": {
+                "code": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": "Event code (unique within the API service), in UpperCamelCase, e.g. `\"DiskAttached\"`",
+                  "type": "string"
+                },
+                "level": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": ":     Severity level for the event        #### Supported values        Possible values:        - `UNSPECIFIED` - Unspecified event severity level    - `DEBUG` - A debug event providing detailed insigh",
+                  "type": "string"
+                },
+                "message": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": ":     A human-readable message describing what has happened    (and suggested actions for the user, if this is a `WARN` or `ERROR` level event)",
+                  "type": "string"
+                },
+                "occurred_at": {
+                  "required": false,
+                  "optional": false,
+                  "computed": true,
+                  "description": ":     Time at which the event has occurred        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTHH:MM:SS.SSS\u00b1HH:",
+                  "type": "string"
+                }
+              }
+            },
+            "occurrence_count": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": "The number of times this event has occurred between `first_occurred_at` and `last_occurrence.occurred_at`. Must be > 0",
+              "type": "number"
+            }
+          }
+        },
+        "node_count": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     Total number of nodes that are currently in the node group.    Both ready and not ready nodes are counted.",
+          "type": "number"
+        },
+        "outdated_node_count": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     Total number of nodes that has outdated node configuration.    These nodes will be replaced by new nodes with up-to-date configuration.",
+          "type": "number"
+        },
+        "ready_node_count": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     Total number of nodes that successfully joined the cluster and are ready to serve workloads.    Both outdated and up-to-date nodes are counted.",
+          "type": "number"
+        },
+        "reconciling": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "Show that there are changes are in flight.",
+          "type": "bool"
+        },
+        "state": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     #### Supported values        Possible values:        - `STATE_UNSPECIFIED`    - `PROVISIONING`    - `RUNNING`    - `DELETING`",
+          "type": "string"
+        },
+        "target_node_count": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     Desired total number of nodes that should be in the node group.    It is either `NodeGroupSpec.fixed_node_count` or arbitrary number between    `NodeGroupAutoscalingSpec.min_node_count` and `Nod",
+          "type": "number"
+        },
+        "version": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     Actual version of NodeGroup. Have format `<major>.<minor>.<patch>-nebius-node.<infra_version>` like \"1.30.0-nebius-node.10\".    Where `<major>.<minor>.<patch>` is Kubernetes version and `<infra_",
+          "type": "string"
+        }
+      }
+    },
+    "strategy": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Defines deployment - roll-out, or nodes re-creation during configuration change.    Allows to setup compromise in roll-out speed, extra resources consumption and workloads disruption.",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "drain_timeout": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Maximum amount of time that the service will spend on attempting gracefully draining a node (evicting it's pods), before    falling back to pod deletion.    By default, node can be drained unlim",
+          "type": "string"
+        },
+        "max_surge": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     The maximum number of additional nodes that can be provisioned above the desired number of nodes during the update process.        This value can be specified either as an absolute number (for e",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "count": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "*Cannot be set alongside percent.*",
+              "type": "number"
+            },
+            "percent": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "*Cannot be set alongside count.*",
+              "type": "number"
+            }
+          }
+        },
+        "max_unavailable": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     The maximum number of nodes that can be simultaneously unavailable during the update process.        This value can be specified either as an absolute number (for example 3) or as a percentage o",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "count": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "*Cannot be set alongside percent.*",
+              "type": "number"
+            },
+            "percent": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "*Cannot be set alongside count.*",
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "template": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": ":     Parameters for Kubernetes Node object and Nebius Compute Instance    If not written opposite a NodeTemplate field update will cause NodeGroup roll-out according NodeGroupDeploymentStrategy.",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "boot_disk": {
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "description": "Parameters of a Node Nebius Compute Instance boot disk.",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "block_size_bytes": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": "",
+              "type": "number"
+            },
+            "size_bytes": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": "*Cannot be set alongside size_kibibytes, size_mebibytes or size_gibibytes.*",
+              "type": "number"
+            },
+            "size_gibibytes": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": "*Cannot be set alongside size_bytes, size_kibibytes or size_mebibytes.*",
+              "type": "number"
+            },
+            "size_kibibytes": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": "*Cannot be set alongside size_bytes, size_mebibytes or size_gibibytes.*",
+              "type": "number"
+            },
+            "size_mebibytes": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": "*Cannot be set alongside size_bytes, size_kibibytes or size_gibibytes.*",
+              "type": "number"
+            },
+            "type": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": ":     #### Supported values        Possible values:        - `UNSPECIFIED`    - `NETWORK_SSD`    - `NETWORK_HDD`    - `NETWORK_SSD_IO_M3`    - `NETWORK_SSD_NON_REPLICATED`",
+              "type": "string"
+            }
+          }
+        },
+        "cloud_init_user_data": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     cloud-init user-data    Should contain at least one SSH key.",
+          "type": "string"
+        },
+        "filesystems": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Static attachments of Compute Filesystem.    Can be used as a workaround, until CSI for Compute Disk and Filesystem will be available.",
+          "type": "nested",
+          "nesting_mode": "list",
+          "attributes": {
+            "attach_mode": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": ":     #### Supported values        Possible values:        - `UNSPECIFIED`    - `READ_ONLY`    - `READ_WRITE`",
+              "type": "string"
+            },
+            "existing_filesystem": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "",
+              "type": "nested",
+              "nesting_mode": "single",
+              "attributes": {
+                "id": {
+                  "required": true,
+                  "optional": false,
+                  "computed": false,
+                  "description": "",
+                  "type": "string"
+                }
+              }
+            },
+            "mount_tag": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": "Specifies the user-defined identifier, allowing to use it as a device in mount command.",
+              "type": "string"
+            }
+          }
+        },
+        "gpu_cluster": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": "Nebius Compute GPUCluster ID that will be attached to node.",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "id": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "",
+              "type": "string"
+            }
+          }
+        },
+        "gpu_settings": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     GPU-related settings.        #### Inner value description        GPU-related settings.",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "drivers_preset": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": ":     Identifier of the predefined set of drivers included in the ComputeImage deployed on ComputeInstances that are part of the NodeGroup.    Supported presets for different platform / Kubernetes ver",
+              "type": "string"
+            }
+          }
+        },
+        "local_disks": {
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "description": ":     local_disks enables the provisioning of fast local drives.    This type of storage is strictly ephemeral: on node restart, all data is erased, similar to RAM.",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "config": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": ":     config defines actions that managed Kubernetes service performs on mounted local disks    to provide them inside Kubernetes cluster with a convenient interface.        When omitted, a default va",
+              "type": "nested",
+              "nesting_mode": "single",
+              "attributes": {
+                "kubelet_ephemeral": {
+                  "required": false,
+                  "optional": true,
+                  "computed": true,
+                  "description": ":     kubelet_ephemeral: combine all local disks into a single storage volume and use it as kubelet's local ephemeral storage on the node    See also https://kubernetes.io/docs/concepts/storage/epheme",
+                  "type": "bool"
+                },
+                "none": {
+                  "required": false,
+                  "optional": true,
+                  "computed": true,
+                  "description": ":     none: \"do nothing\" - local disks will be provisioned as on a regular compute instance.        *Cannot be set alongside kubelet_ephemeral.*",
+                  "type": "bool"
+                }
+              }
+            },
+            "passthrough_group": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": ":     Requests passthrough local disks from the host.    Topology of the provided disks is preserved during stop and start    for every instance of a specific platform and preset in the region.",
+              "type": "nested",
+              "nesting_mode": "single",
+              "attributes": {
+                "requested": {
+                  "required": false,
+                  "optional": true,
+                  "computed": false,
+                  "description": ":     Passthrough local disks from the underlying host.        Devices are expected to appear in the guest as NVMe devices (nvme0, nvme1, ...),    but the exact number depends on the preset.    Enable",
+                  "type": "bool"
+                }
+              }
+            }
+          }
+        },
+        "metadata": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": "",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "labels": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": ":     Kubernetes Node labels.        Keys and values must follow Kubernetes label syntax:    https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/        For now change will not be",
+              "type": [
+                "map",
+                "string"
+              ]
+            }
+          }
+        },
+        "network_interfaces": {
+          "required": false,
+          "optional": true,
+          "computed": true,
+          "description": "",
+          "type": "nested",
+          "nesting_mode": "list",
+          "attributes": {
+            "public_ip_address": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": ":     Parameters for Public IPv4 address associated with the interface.    Set to empty value, to enable it.        #### Inner value description        Describes a public IP address.",
+              "type": "nested",
+              "nesting_mode": "single"
+            },
+            "subnet_id": {
+              "required": false,
+              "optional": true,
+              "computed": true,
+              "description": ":     Nebius VPC Subnet ID that will be attached to a node cloud instance network interface.    By default Cluster control plane subnet_id used.    Subnet should be located in the same network with co",
+              "type": "string"
+            }
+          }
+        },
+        "os": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     OS version that will be used to create the boot disk of Compute Instances in the NodeGroup.    Supported platform / Kubernetes version / OS / driver presets combinations    * `gpu-l40s-a`, `gpu-",
+          "type": "string"
+        },
+        "preemptible": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Configures whether the nodes in the group are preemptible.    Set to empty value to enable preemptible nodes.",
+          "type": "nested",
+          "nesting_mode": "single"
+        },
+        "reservation_policy": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     reservation_policy is an interface of the \"capacity block\" (or \"capacity block group\") mechanism of Nebius Compute.        #### Inner value description        ReservationPolicy is copied as-is f",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "policy": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": ":     #### Supported values        Possible values:        - `AUTO`:       1) Will try to launch instance in any reservation_ids if provided.       2) Will try to launch instance in any of the availab",
+              "type": "string"
+            },
+            "reservation_ids": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "Capacity block groups, order matters",
+              "type": [
+                "list",
+                "string"
+              ]
+            }
+          }
+        },
+        "resources": {
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "description": "Resources that will have Nebius Compute Instance where Node kubelet will run.",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "platform": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": "",
+              "type": "string"
+            },
+            "preset": {
+              "required": false,
+              "optional": true,
+              "computed": false,
+              "description": "",
+              "type": "string"
+            }
+          }
+        },
+        "service_account_id": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     the Nebius service account whose credentials will be available on the nodes of the group.    With these credentials, it is possible to make `nebius` CLI or public API requests from the nodes",
+          "type": "string"
+        },
+        "taints": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     Kubernetes Node taints.    For now change will not be propagated to existing nodes, so will be applied only to Kubernetes Nodes created after the field change.    That behaviour may change later",
+          "type": "nested",
+          "nesting_mode": "list",
+          "attributes": {
+            "effect": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": ":     #### Supported values        Possible values:        - `EFFECT_UNSPECIFIED`    - `NO_EXECUTE`    - `NO_SCHEDULE`    - `PREFER_NO_SCHEDULE`",
+              "type": "string"
+            },
+            "key": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": "",
+              "type": "string"
+            },
+            "value": {
+              "required": true,
+              "optional": false,
+              "computed": false,
+              "description": "",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "updated_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was last updated.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM",
+      "type": "string"
+    },
+    "version": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Version is desired Kubernetes version of the cluster. For now only acceptable format is    `<major>.<minor>` like \"1.31\". Option for patch version update will be added later.    By default the c",
+      "type": "string"
+    }
+  },
+  "nebius_compute_v1_filesystem": {
+    "block_size_bytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Block size in bytes.    The block size must be a power of two between 4096 bytes (4 KiB) and 131072 bytes (128 KiB).    The default value is 4096 bytes (4 KiB).",
+      "type": "number"
+    },
+    "created_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was created.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTH",
+      "type": "string"
+    },
+    "forbid_deletion": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Prevents deletion whilst set",
+      "type": "bool"
+    },
+    "id": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "Identifier for the resource, unique for its resource type.",
+      "type": "string"
+    },
+    "labels": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Labels associated with the resource.",
+      "type": [
+        "map",
+        "string"
+      ]
+    },
+    "metadata": {
+      "required": false,
+      "optional": true,
+      "computed": true,
+      "description": ":     #### Inner value description        Common resource metadata.",
+      "type": "nested",
+      "nesting_mode": "single"
+    },
+    "name": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Human readable name for the resource.",
+      "type": "string"
+    },
+    "parent_id": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": "Identifier of the parent resource to which the resource belongs.",
+      "type": "string"
+    },
+    "resource_version": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Version of the resource for safe concurrent modifications and consistent reads.    Positive and monotonically increases on each resource spec change (but *not* on each change of the    resource'",
+      "type": "number"
+    },
+    "size_bytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_kibibytes, size_mebibytes or size_gibibytes.*",
+      "type": "number"
+    },
+    "size_gibibytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_bytes, size_kibibytes or size_mebibytes.*",
+      "type": "number"
+    },
+    "size_kibibytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_bytes, size_mebibytes or size_gibibytes.*",
+      "type": "number"
+    },
+    "size_mebibytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_bytes, size_kibibytes or size_gibibytes.*",
+      "type": "number"
+    },
+    "status": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "block_size_bytes": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "number"
+        },
+        "read_only_attachments": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": [
+            "list",
+            "string"
+          ]
+        },
+        "read_write_attachments": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": [
+            "list",
+            "string"
+          ]
+        },
+        "reconciling": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "Indicates whether there is an ongoing operation",
+          "type": "bool"
+        },
+        "size_bytes": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "number"
+        },
+        "state": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     #### Supported values        Possible values:        - `UNSPECIFIED`    - `CREATING`    - `READY`    - `UPDATING`    - `DELETING`    - `ERROR`",
+          "type": "string"
+        },
+        "state_description": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "string"
+        }
+      }
+    },
+    "type": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": ":     The Shared Filesystem type determines its limits and performance characteristics.    For details, see https://docs.nebius.com/compute/storage/types#filesystems-types        #### Supported values",
+      "type": "string"
+    },
+    "updated_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was last updated.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM",
+      "type": "string"
+    }
+  },
+  "nebius_compute_v1_disk": {
+    "block_size_bytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Block size in bytes.    The block size must be a power of two between 4096 bytes (4 KiB) and 131072 bytes (128 KiB).    The default value is 4096 bytes (4 KiB).",
+      "type": "number"
+    },
+    "created_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was created.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM-DDTH",
+      "type": "string"
+    },
+    "disk_encryption": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Defines how data on the disk is encrypted. By default, no encryption is applied.",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "type": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": ":     #### Supported values        Possible values:        - `DISK_ENCRYPTION_UNSPECIFIED` - No encryption is applied unless explicitly specified.    - `DISK_ENCRYPTION_MANAGED`:       Enables encrypt",
+          "type": "string"
+        }
+      }
+    },
+    "forbid_deletion": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Prevents deletion whilst set",
+      "type": "bool"
+    },
+    "id": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "Identifier for the resource, unique for its resource type.",
+      "type": "string"
+    },
+    "labels": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": ":     Labels associated with the resource.",
+      "type": [
+        "map",
+        "string"
+      ]
+    },
+    "metadata": {
+      "required": false,
+      "optional": true,
+      "computed": true,
+      "description": ":     #### Inner value description        Common resource metadata.",
+      "type": "nested",
+      "nesting_mode": "single"
+    },
+    "name": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "Human readable name for the resource.",
+      "type": "string"
+    },
+    "parent_id": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": "Identifier of the parent resource to which the resource belongs.",
+      "type": "string"
+    },
+    "resource_version": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Version of the resource for safe concurrent modifications and consistent reads.    Positive and monotonically increases on each resource spec change (but *not* on each change of the    resource'",
+      "type": "number"
+    },
+    "size_bytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_kibibytes, size_mebibytes or size_gibibytes.*",
+      "type": "number"
+    },
+    "size_gibibytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_bytes, size_kibibytes or size_mebibytes.*",
+      "type": "number"
+    },
+    "size_kibibytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_bytes, size_mebibytes or size_gibibytes.*",
+      "type": "number"
+    },
+    "size_mebibytes": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside size_bytes, size_kibibytes or size_gibibytes.*",
+      "type": "number"
+    },
+    "source_image_family": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside source_image_id.*",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "image_family": {
+          "required": true,
+          "optional": false,
+          "computed": false,
+          "description": "",
+          "type": "string"
+        },
+        "parent_id": {
+          "required": false,
+          "optional": true,
+          "computed": false,
+          "description": "",
+          "type": "string"
+        }
+      }
+    },
+    "source_image_id": {
+      "required": false,
+      "optional": true,
+      "computed": false,
+      "description": "*Cannot be set alongside source_image_family.*",
+      "type": "string"
+    },
+    "status": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": "",
+      "type": "nested",
+      "nesting_mode": "single",
+      "attributes": {
+        "block_size_bytes": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "number"
+        },
+        "lock_state": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "Indicates resources that prevent the disk from being attached as read-write.",
+          "type": "nested",
+          "nesting_mode": "single",
+          "attributes": {
+            "images": {
+              "required": false,
+              "optional": false,
+              "computed": true,
+              "description": ":     Disk is locked for deletion and for read-write operations while image is being created.    Here is the list of these images.",
+              "type": [
+                "list",
+                "string"
+              ]
+            }
+          }
+        },
+        "read_only_attachments": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": [
+            "list",
+            "string"
+          ]
+        },
+        "read_write_attachment": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     Current read-write owner (instance ID).    May refer to an instance in any state, including stopped    (this semantics is preserved for backward compatibility).    Reassigned on disk detach, ins",
+          "type": "string"
+        },
+        "reconciling": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "Indicates whether there is an ongoing operation",
+          "type": "bool"
+        },
+        "size_bytes": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "number"
+        },
+        "source_image_cpu_architecture": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     #### Supported values        Possible values:        - `SOURCE_IMAGE_CPU_UNSPECIFIED`    - `AMD64`    - `ARM64`",
+          "type": "string"
+        },
+        "source_image_id": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "string"
+        },
+        "state": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": ":     #### Supported values        Possible values:        - `UNSPECIFIED`    - `CREATING`    - `READY`    - `UPDATING`    - `DELETING`    - `ERROR` - Indicates that error happened during disk creatio",
+          "type": "string"
+        },
+        "state_description": {
+          "required": false,
+          "optional": false,
+          "computed": true,
+          "description": "",
+          "type": "string"
+        }
+      }
+    },
+    "type": {
+      "required": true,
+      "optional": false,
+      "computed": false,
+      "description": ":     The type of disk defines the performance and reliability characteristics of the block device.    For details, see https://docs.nebius.com/compute/storage/types#disks-types        #### Supported",
+      "type": "string"
+    },
+    "updated_at": {
+      "required": false,
+      "optional": false,
+      "computed": true,
+      "description": ":     Timestamp indicating when the resource was last updated.        A string representing a timestamp in [ISO 8601](https://en.wikipedia.org/wiki/ISO_8601) format: `YYYY-MM-DDTHH:MM:SSZ` or `YYYY-MM",
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+# -----------------------------------------------------------------------------
+# Path A deployment values — template
+# WHY: Copy this file to `path-a.auto.tfvars` and fill in the tenant-specific
+# identifiers. The real tfvars is gitignored because `parent_id` and `subnet_id`
+# are scoped to a specific project and reveal where the deployment lives.
+#
+# Path A is the zero-approvals baseline — no gpu_cluster (InfiniBand), no
+# filestore (Nebius managed filesystem). Everything runs over 200 Gbps
+# Ethernet with NFS-over-disk for the shared filesystem. For the IB-equipped
+# variant see Path B (soperator/installations/poc/) or git tag
+# `path-a-ib-working-v1` for the pre-refactor snapshot.
+# -----------------------------------------------------------------------------
+
+# Tenant / project placement. Discover via:
+#   nebius iam v1 project list --format json | jq '.items[].metadata.id'
+parent_id = "project-<your-project-id>"
+
+# VPC subnet the cluster and NFS VM share. Discover via:
+#   nebius vpc v1 subnet list --parent-id <parent_id> --format json | jq '.items[].metadata.id'
+subnet_id = "vpcsubnet-<your-subnet-id>"
+
+# Nebius region. Only eu-north1 and eu-north2 are known to expose gpu-h200-sxm.
+region = "eu-north2"
+
+# Number of GPU nodes (each gpu-h200-sxm exposes 8 × H200 GPUs).
+gpu_nodes_count = 2
+
+# test_mode toggles the k8s-training module's built-in nccl-test DaemonSet.
+# Keep true for demo and validation.
+test_mode = true

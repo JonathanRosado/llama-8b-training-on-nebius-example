@@ -1,0 +1,73 @@
+# TorchTitan pinned main SHA: 74485ea3381d7c1739b004daace3d9ecaead67e9
+# Basis: torchtitan.models.llama3.config_registry.llama3_8b()
+# Strategy: HSDP with 2 replica groups x 8-rank shard groups on 16 GPUs
+
+module = "llama3"
+config = "llama3_8b"
+
+[slurm]
+job_name = "tt-hsdp"
+nodes = 2
+ntasks_per_node = 1
+gpus_per_node = 8
+cpus_per_task = 32
+time = "00:45:00"
+
+[paths]
+repo = "/home/nebius/training/titan/torchtitan"
+hf_assets_path = "/home/nebius/.cache/huggingface/assets/Llama-3.1-8B"
+dataset_path = "/mnt/datasets/c4"
+run_root = "/home/nebius/training-runs/hsdp"
+checkpoint_dirname = "checkpoints"
+metrics_dirname = "metrics"
+
+[env]
+NCCL_IB_HCA = "mlx5"
+NCCL_IB_GID_INDEX = "3"
+TORCH_NCCL_ASYNC_ERROR_HANDLING = "1"
+PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
+
+[training]
+local_batch_size = 1
+seq_len = 4096
+steps = 60
+dtype = "bfloat16"
+mixed_precision_param = "bfloat16"
+mixed_precision_reduce = "float32"
+gc_freq = 200
+
+[dataloader]
+dataset = "c4_parquet"
+dataset_path = "/mnt/datasets/c4"
+num_workers = 2
+pin_memory = false
+
+[parallelism]
+data_parallel_replicate_degree = 2
+data_parallel_shard_degree = 8
+tensor_parallel_degree = 1
+pipeline_parallel_degree = 1
+
+[checkpoint]
+enable = true
+folder = "checkpoints"
+interval = 1000
+last_save_model_only = true
+
+[metrics]
+log_freq = 5
+enable_tensorboard = true
+save_tb_folder = "metrics"
+
+[profiling]
+enable_profiling = false
+profile_freq = 1000000
+
+[validator]
+enable = false
+freq = 1000000
+steps = 1
+
+[debug]
+print_config = true
+save_config_file = "resolved-config.json"

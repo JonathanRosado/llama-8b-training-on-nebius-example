@@ -1,0 +1,10 @@
+# Copy to poc.auto.tfvars and fill in. The real file is gitignored.
+#
+# Discover these values:
+#   project_id=$(nebius config get parent-id)
+#   tenant_id=$(nebius config get tenant-id)
+
+project_id   = "project-XXXXXXXXXXXXXXXXXX"
+tenant_id    = "tenant-XXXXXXXXXXXXXXXXXX"
+region       = "eu-north1"
+profile_name = "nebius-terraform"

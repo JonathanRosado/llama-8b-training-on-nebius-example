@@ -1,0 +1,33 @@
+{
+  "config": "fsdp_full",
+  "slurm_job": 40,
+  "strategy": "FSDP2 full-shard",
+  "parallelism": {
+    "tensor_parallel_degree": 1,
+    "data_parallel_shard_degree": 16,
+    "data_parallel_replicate_degree": 1,
+    "pipeline_parallel_degree": 1
+  },
+  "model": "meta-llama/Llama-3.1-8B",
+  "dataset": "allenai/c4 (streaming)",
+  "training": {
+    "steps": 60,
+    "seq_len": 4096,
+    "local_batch_size": 1,
+    "dtype": "bfloat16"
+  },
+  "tokens_per_step_cluster": 65536,
+  "total_tokens": 3932160,
+  "wall_clock_step1_to_completed_s": 44.71,
+  "tokens_per_sec_per_gpu": 7785,
+  "mfu_percent": 40.51,
+  "memory_max_reserved_percent": 15.4,
+  "loss_first": 12.222,
+  "loss_last": 7.994,
+  "training_decreased": true,
+  "checkpoint_step": 60,
+  "checkpoint_format": "DCP (cross-world-size resharding supported)",
+  "wall_clock_includes": "step 1 start through Training completed (includes step-0 compile/warmup + step-60 checkpoint save + teardown)",
+  "tokens_per_sec_per_gpu_window": "steady-state window (TorchTitan internal throughput counter, excludes compile/warmup); back-of-envelope (total_tokens / wall_clock) is lower and not directly comparable",
+  "mfu_formula": "(tokens_per_sec_per_gpu * 4.8e10 flops/token) / 9.89e14 flops/gpu  # H200 BF16 peak, Llama-3.1-8B 6*P forward+backward"
+}

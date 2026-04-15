@@ -1,0 +1,147 @@
+nodesets:
+  enabled: true
+
+  interval: 5m
+  timeout: 5m
+  version: 3.0.2
+  namespace: soperator
+  releaseName: soperator-nodesets
+
+  overrideValues: 
+    nodesets:
+      - name: gpu-h200
+        annotations:
+          slurm.nebius.ai/parental-cluster-ref: soperator
+
+        replicas: 2
+        maxUnavailable: 20%
+
+        gpu:
+          enabled: true
+          nvidia:
+            gdrCopyEnabled: true
+
+        nodeConfig:
+          features:
+            - gpu_h200_sxm
+            - network_ssd
+          static: "CPUs=128 Boards=1 SocketsPerBoard=2 CoresPerSocket=32 ThreadsPerCore=2 Gres=gpu:nvidia_h200:8"
+          dynamic: "\"{ \\\"ib_pod\\\": \\\"$TOPO_SWITCH_TIER2\\\", \\\"ib_su\\\": \\\"$TOPO_SWITCH_TIER1\\\" }\""
+          gresConfig:
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia4 Cores=0-31 Links=-1,1,1,1,1,1,1,1 Flags=nvidia_gpu_env
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia5 Cores=0-31 Links=1,-1,1,1,1,1,1,1 Flags=nvidia_gpu_env
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia6 Cores=0-31 Links=1,1,-1,1,1,1,1,1 Flags=nvidia_gpu_env
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia7 Cores=0-31 Links=1,1,1,-1,1,1,1,1 Flags=nvidia_gpu_env
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia0 Cores=32-63 Links=1,1,1,1,-1,1,1,1 Flags=nvidia_gpu_env
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia1 Cores=32-63 Links=1,1,1,1,1,-1,1,1 Flags=nvidia_gpu_env
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia2 Cores=32-63 Links=1,1,1,1,1,1,-1,1 Flags=nvidia_gpu_env
+            - AutoDetect=off Name=gpu Type=nvidia_h200 File=/dev/nvidia3 Cores=32-63 Links=1,1,1,1,1,1,1,-1 Flags=nvidia_gpu_env
+
+        slurmd:
+          resources:
+            cpu: 125950m
+            memory: 1436Gi
+            ephemeralStorage: 382Gi
+            gpu: 8
+
+          volumes:
+            spool:
+              emptyDir: {}
+
+            jail:
+              persistentVolumeClaim:
+                claimName: jail-pvc
+                readOnly: false
+
+            jailSubMounts:
+
+
+
+
+
+
+            customVolumeMounts:
+              - name: slurm-scripts
+                mountPath: /opt/slurm_scripts/
+                volumeSource:
+                  configMap:
+                    name: slurm-scripts
+                    defaultMode: 0755
+
+              - name: slurm-scripts-jail
+                mountPath: /mnt/jail.upper/opt/slurm_scripts/
+                volumeSource:
+                  configMap:
+                    name: slurm-scripts
+                    defaultMode: 0755
+
+              - name: sys-host
+                mountPath: /mnt/jail.upper/sys-host
+                readOnly: true
+                volumeSource:
+                  hostPath:
+                    path: /sys
+                    type: Directory
+
+
+              - name: hpc-jobs-dir
+                mountPath: /var/run/nebius/slurm
+                volumeSource:
+                  hostPath:
+                    path: /var/run/nebius/slurm
+                    type: DirectoryOrCreate
+
+              - name: nvidia-driver-root
+                mountPath: /run/nvidia/driver
+                readOnly: false
+                volumeSource:
+                  hostPath:
+                    path: /
+                    type: ""
+
+            sharedMemorySize: 64Gi
+
+          security:
+            appArmorProfile: unconfined
+
+        munge:
+          resources:
+            cpu: 100m
+            memory: 0.5Gi
+            ephemeralStorage: 5Gi
+
+          security:
+            appArmorProfile: unconfined
+
+        sssd:
+          enabled: false
+          resources:
+            cpu: 200m
+            memory: 0.5Gi
+            ephemeralStorage: 5Gi
+
+        sssdConfSecretRefName: ""
+        sssdLdapCAConfigMapRefName: ""
+
+        configMapRefSupervisord: custom-supervisord-config
+        configMapRefSshd: 
+
+        enableHostUserNamespace: true
+
+        priorityClass: soperator-worker-high-priority
+        nodeSelector:
+          slurm.nebius.ai/nodeset-name: gpu-h200
+        tolerations:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+
+        customInitContainers:
+          - name: ensure-jail-virtiofs
+            image: cr.eu-north1.nebius.cloud/soperator/busybox
+            volumeMounts: [{ name: jail, mountPath: /volume-mount }]
+            command: ["grep", " /volume-mount virtiofs ", "/proc/mounts"]
+
+
+
+

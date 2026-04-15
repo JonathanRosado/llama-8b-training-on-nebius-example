@@ -1,0 +1,27 @@
+# Research PDFs — too large for git without LFS; catalogs (.md) are committed
+research/**/*.pdf
+
+# Windows zone identifier metadata
+*.pdf:Zone.Identifier
+
+# Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Terraform — provider binaries, ephemeral plans, local state, direnv-generated
+# backend override (regenerated per-shell by .envrc at the project root)
+**/.terraform/
+**/*.tfplan
+**/*.tfstate
+**/*.tfstate.backup
+**/terraform_backend_override.tf
+
+# Ralph Loop ephemeral logs (state.md is committed at loop completion)
+.ralph/run-*.log
+.ralph/*.out
+.ralph/*.json
+soperator/installations/poc/tfplan*

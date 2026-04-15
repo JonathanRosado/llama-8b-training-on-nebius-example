@@ -1,0 +1,167 @@
+{
+  "model_spec": {
+    "name": "llama3",
+    "flavor": "8B"
+  },
+  "hf_assets_path": "/home/nebius/.cache/huggingface/assets/Llama-3.1-8B",
+  "dump_folder": "/home/nebius/training-runs/fsdp_full/40",
+  "profiling": {
+    "enable_profiling": false,
+    "save_traces_folder": "profile_traces",
+    "profile_freq": 1000000,
+    "profiler_active": 1,
+    "profiler_warmup": 3,
+    "profiler_repeat": null,
+    "profiler_skip_first": null,
+    "profiler_skip_first_wait": null,
+    "enable_memory_snapshot": false,
+    "save_memory_snapshot_folder": "memory_snapshot"
+  },
+  "metrics": {
+    "log_freq": 5,
+    "enable_tensorboard": true,
+    "disable_color_printing": false,
+    "save_tb_folder": "metrics",
+    "save_for_all_ranks": false,
+    "enable_wandb": false
+  },
+  "tokenizer": {},
+  "dataloader": {
+    "dataset": "c4",
+    "dataset_path": "allenai/c4",
+    "num_workers": 2,
+    "persistent_workers": false,
+    "pin_memory": false,
+    "prefetch_factor": null,
+    "infinite": true
+  },
+  "model_converters": {
+    "converters": [],
+    "print_after_conversion": false
+  },
+  "optimizer": {
+    "name": "AdamW",
+    "lr": 0.0003,
+    "beta1": 0.9,
+    "beta2": 0.95,
+    "eps": 1e-08,
+    "weight_decay": 0.1,
+    "implementation": "fused",
+    "param_groups": []
+  },
+  "lr_scheduler": {
+    "warmup_steps": 200,
+    "total_steps": null,
+    "decay_ratio": null,
+    "decay_type": "linear",
+    "min_lr_factor": 0.0
+  },
+  "training": {
+    "local_batch_size": 1,
+    "global_batch_size": -1,
+    "seq_len": 4096,
+    "max_norm": 1.0,
+    "steps": 60,
+    "enable_cpu_offload": false,
+    "dtype": "bfloat16",
+    "mixed_precision_param": "bfloat16",
+    "mixed_precision_reduce": "float32",
+    "gc_freq": 200,
+    "gc_debug": false
+  },
+  "parallelism": {
+    "data_parallel_replicate_degree": 1,
+    "data_parallel_shard_degree": -1,
+    "fsdp_reshard_after_forward": "default",
+    "tensor_parallel_degree": 1,
+    "disable_loss_parallel": false,
+    "enable_async_tensor_parallel": false,
+    "enable_sequence_parallel": true,
+    "pipeline_parallel_degree": 1,
+    "module_fqns_per_model_part": null,
+    "pipeline_parallel_first_stage_less_layers": 1,
+    "pipeline_parallel_last_stage_less_layers": 1,
+    "pipeline_parallel_layers_per_stage": null,
+    "pipeline_parallel_schedule": "1F1B",
+    "pipeline_parallel_schedule_csv": "",
+    "pipeline_parallel_microbatch_size": 1,
+    "context_parallel_degree": 1,
+    "context_parallel_load_balancer": "headtail",
+    "context_parallel_rotate_method": "allgather",
+    "expert_parallel_degree": 1,
+    "expert_tensor_parallel_degree": 1,
+    "expert_parallel_comm_backend": "standard",
+    "hybridep_non_blocking_expert_capacity_factor": null
+  },
+  "checkpoint": {
+    "enable": true,
+    "folder": "checkpoints",
+    "interval": 1000,
+    "initial_load_path": null,
+    "initial_load_model_only": true,
+    "initial_load_in_hf": false,
+    "initial_load_in_hf_quantized": false,
+    "last_save_model_only": true,
+    "last_save_in_hf": false,
+    "export_dtype": "float32",
+    "async_mode": "disabled",
+    "keep_latest_k": 10,
+    "load_step": -1,
+    "exclude_from_loading": [],
+    "enable_first_step_checkpoint": false,
+    "create_seed_checkpoint": false,
+    "load_only": false
+  },
+  "activation_checkpoint": {
+    "mode": "selective",
+    "per_op_sac_force_recompute_mm_shapes_by_fqns": [
+      "moe.router.gate"
+    ],
+    "early_stop": false,
+    "memory_budget": 0.5,
+    "visualize_memory_budget_pareto": false,
+    "preserve_rng_state": true,
+    "determinism_check": "default",
+    "debug": false
+  },
+  "compile": {
+    "enable": false,
+    "components": [
+      "model",
+      "loss"
+    ],
+    "backend": "inductor"
+  },
+  "comm": {
+    "init_timeout_seconds": 300,
+    "train_timeout_seconds": 100,
+    "trace_buf_size": 20000,
+    "save_traces_folder": "comm_traces",
+    "save_traces_file_prefix": "rank_",
+    "mode": "default"
+  },
+  "validator": {
+    "freq": 1000000,
+    "enable": false,
+    "steps": 1,
+    "dataloader": {
+      "dataset": "c4_validation",
+      "dataset_path": null,
+      "num_workers": 0,
+      "persistent_workers": false,
+      "pin_memory": false,
+      "prefetch_factor": null,
+      "infinite": false
+    }
+  },
+  "debug": {
+    "seed": null,
+    "deterministic": false,
+    "deterministic_warn_only": false,
+    "moe_force_load_balance": false,
+    "detect_anomaly": false,
+    "batch_invariant": false,
+    "print_config": true,
+    "save_config_file": "resolved-config.json"
+  }
+}

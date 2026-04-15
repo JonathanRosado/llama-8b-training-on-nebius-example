@@ -1,0 +1,344 @@
+# -----------------------------------------------------------------------------
+# Path A Slinky Helm values (v1.1.0)
+# WHY: Biased for operability and interview clarity. One cluster, one NodeSet
+# pinned as DaemonSet so every GPU Kubernetes node maps 1:1 to a Slurm node,
+# and an external NFS share mounted on login+nodesets for /home and /shared.
+#
+# WHY (state location): The slurmctld save-state lives on a local ReadWriteOnce
+# PVC created by controller.persistence — never on NFS. Upstream Slurm
+# documentation explicitly warns that StateSaveLocation on NFS causes latency
+# and corruption hazards. Slinky's upstream pattern is local RWO PVC plus
+# Kubernetes controller-pod regeneration for HA, which is the correct shape
+# for a production posture and matches SchedMD's reference deployment.
+#
+# WHY (no accounting): slurmdbd / MySQL is intentionally disabled. The PoC
+# demonstrates scheduling and collectives, not accounting, so adding a DB would
+# only inflate the blast radius without being defensible as required.
+# -----------------------------------------------------------------------------
+
+clusterName: ${slurm_cluster_name}
+
+# WHY: configFiles installs additional drop-ins under /etc/slurm. Providing a
+# gres.conf with AutoDetect=nvidia lets slurmd discover NVIDIA devices at
+# startup instead of us hand-maintaining device paths per node.
+# WHY (plugstack.conf): enables the Pyxis SPANK plugin so Slurm jobs can be
+# launched inside enroot-managed OCI containers via `srun --container-image=...`.
+# The glob (`/*`) is required — slurmctld resolves the include path at startup
+# and would fail if the pyxis libraries weren't installed, so we glob to
+# tolerate the controller pod that doesn't ship with pyxis. The login and
+# slurmd pods use the -pyxis image variants below which DO ship the plugin.
+# Reference: https://github.com/SlinkyProject/slurm-operator/blob/v1.1.0/docs/usage/pyxis.md
+configFiles:
+  gres.conf: |
+    AutoDetect=nvidia
+  plugstack.conf: |
+    include /usr/share/pyxis/*
+
+# -----------------------------------------------------------------------------
+# Controller (slurmctld)
+# -----------------------------------------------------------------------------
+controller:
+  # WHY: Explicit even though persistence.enabled defaults to true, so that the
+  # design choice (RWO PVC, 8Gi, default storage class) is legible in the file.
+  # StateSaveLocation is hardcoded to /var/spool/slurmctld/<clusterName> inside
+  # the container; this PVC is what the operator mounts there.
+  persistence:
+    enabled: true
+    accessModes:
+      - ReadWriteOnce
+    resources:
+      requests:
+        storage: 8Gi
+
+  # WHY: Cluster-wide slurm.conf settings are expressed via extraConfMap rather
+  # than hand-authoring slurm.conf. The operator generates the base file from
+  # chart values (ClusterName, NodeName lines, etc.), and these keys are
+  # appended verbatim. GresTypes declares the cluster knows about "gpu";
+  # MpiDefault=pmix matches the PMIx-enabled container images; ReturnToService
+  # overrides the stricter default so transient node blips don't wedge jobs.
+  extraConfMap:
+    GresTypes: gpu
+    MpiDefault: pmix
+    ReturnToService: "2"
+    # WHY (no PropagateResourceLimits): the IB-era Path A needed ALL here so
+    # RLIMIT_MEMLOCK=unlimited propagated to srun steps for libibverbs RDMA
+    # memory registration. NCCL-over-sockets on this Ethernet-only Path A
+    # uses kernel TCP buffers, not locked host pages, so memlock stays at the
+    # kubelet default and no propagation is needed. If you bring IB back, add
+    # `PropagateResourceLimits: ALL` here AND `ulimit -l unlimited` in sbatch
+    # wrappers (see git tag path-a-ib-working-v1 for the full recipe).
+
+  # WHY: The controller does not need any NFS mounts. Home and shared dirs are
+  # consumed by loginsets and nodesets; accounting is disabled; state is on
+  # the RWO PVC. Pinning the controller to system nodes keeps it off GPU hosts.
+  podSpec:
+    nodeSelector:
+      kubernetes.io/os: linux
+      role: system
+
+# -----------------------------------------------------------------------------
+# LoginSet — SSH-accessible pods where users submit Slurm jobs
+# -----------------------------------------------------------------------------
+# WHY: Schema is a map keyed by logical loginset name; 'login' is the name and
+# becomes part of resource names. Single replica is sufficient for the PoC.
+# The chart ships a sample 'slinky' loginset with enabled=false, so renaming to
+# 'login' introduces a brand-new map entry. Helm deep-merges per-key, which
+# means none of the chart's default images propagate into our new key — every
+# container image reference must be provided explicitly here.
+loginsets:
+  login:
+    enabled: true
+    replicas: 1
+
+    login:
+      # WHY: Login container image is declared explicitly because renaming the
+      # map key from the chart's sample 'slinky' bypasses the default image
+      # merge. Using the Slinky -pyxis variant (precompiled Pyxis SPANK plugin
+      # + Enroot runtime) gives us containerized Slurm jobs via
+      # `srun --container-image=...`, which is the canonical Nebius pattern for
+      # running measurement tools and training framework containers without
+      # baking them into the base image.
+      # Reference: https://github.com/SlinkyProject/slurm-operator/blob/v1.1.0/docs/usage/pyxis.md
+      image:
+        repository: ghcr.io/slinkyproject/login-pyxis
+        tag: 25.11-ubuntu24.04
+      # WHY: Enroot performs user-namespace + mount-namespace operations that
+      # require CAP_SYS_ADMIN when running inside a Kubernetes pod. The Slinky
+      # Pyxis guide documents this requirement explicitly; without privileged
+      # the container import step fails with "Operation not permitted" on
+      # unshare(). This is a deliberate security tradeoff — scoped to the
+      # login pod which is the only interactive surface; slurmd runs its
+      # container steps with capability-level permissions from the runtime.
+      securityContext:
+        privileged: true
+      # WHY: NCCL defaults are set on the login container so interactive
+      # WHY (Ethernet-only NCCL defaults): Path A has no InfiniBand fabric
+      # (no nebius_compute_v1_gpu_cluster binding), so NCCL falls back to
+      # sockets over the 200 Gbps Ethernet interface. Canonical env set per
+      # the NCCL env guide (docs.nvidia.com/deeplearning/nccl/user-guide/docs/env.html):
+      #   - NCCL_IB_DISABLE=1 forces the sockets transport
+      #   - NCCL_SOCKET_IFNAME==eth0 uses exact-match syntax (leading '=')
+      #     so NCCL picks eth0 specifically rather than any interface whose
+      #     name starts with 'e'. ib0 no longer exists on this path.
+      #   - NCCL_SOCKET_NTHREADS=4 + NCCL_NSOCKS_PERTHREAD=4 give 16 socket
+      #     threads per rank; the NCCL env guide recommends these values for
+      #     100G-class+ socket networks.
+      #   - NCCL_P2P_LEVEL=NVL keeps intra-node NVLink P2P (unrelated to IB).
+      env:
+        - name: NCCL_IB_DISABLE
+          value: "1"
+        - name: NCCL_SOCKET_IFNAME
+          value: "=eth0"
+        - name: NCCL_SOCKET_NTHREADS
+          value: "4"
+        - name: NCCL_NSOCKS_PERTHREAD
+          value: "4"
+        - name: NCCL_P2P_LEVEL
+          value: "NVL"
+      # WHY: Container-level mounts for the NFS volumes declared in podSpec.
+      # /nfs/home is the shared user dir; /nfs/shared is team scratch.
+      volumeMounts:
+        - name: nfs-home
+          mountPath: /nfs/home
+        - name: nfs-shared
+          mountPath: /nfs/shared
+
+    initconf:
+      # WHY: initconf image pinned explicitly for the same reason as 'login'
+      # above — renaming the loginset key breaks the default-image merge.
+      # Matches the chart default (alpine:latest) which only runs briefly to
+      # write /etc/slurm bootstrap files before the login container starts.
+      image:
+        repository: docker.io/library/alpine
+        tag: latest
+
+    podSpec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        role: system
+      # WHY: Pod-level volume declarations. The NFS server is the Nebius VM
+      # created by modules/nfs-server/; its private IP is injected from
+      # Terraform. Subdirectories are pre-created by null_resource in nfs.tf.
+      volumes:
+        - name: nfs-home
+          nfs:
+            server: ${nfs_server_ip}
+            path: /nfs/home
+        - name: nfs-shared
+          nfs:
+            server: ${nfs_server_ip}
+            path: /nfs/shared
+        # Memory-backed emptyDir for /dev/shm (see slurmd volumeMounts note).
+        - name: dshm
+          emptyDir:
+            medium: Memory
+
+# -----------------------------------------------------------------------------
+# NodeSet — slurmd pods that run jobs on GPU hosts
+# -----------------------------------------------------------------------------
+# WHY: Schema is a map keyed by logical nodeset name ('gpu'). DaemonSet mode
+# pins one slurmd per matching Kubernetes node, enforcing the 1:1 Slurm-to-K8s
+# mapping that underpins all scheduling assumptions in this design. The chart
+# ships a sample 'slinky' nodeset with enabled=true by default; we explicitly
+# disable it so only the 'gpu' nodeset we define ever renders.
+nodesets:
+  # WHY: Disable the sample nodeset the chart enables by default. Without
+  # this, a StatefulSet-scaled 'slinky' nodeset would be deployed alongside
+  # our DaemonSet-scaled 'gpu' nodeset, pulling slurmd images onto the system
+  # node group and creating a ghost NodeSet CR the operator would try to
+  # reconcile.
+  slinky:
+    enabled: false
+
+  gpu:
+    enabled: true
+    scalingMode: DaemonSet
+    # WHY: replicas is ignored under DaemonSet mode but is still required by
+    # the CRD; we set it to the planned node count for readability.
+    replicas: ${gpu_nodes_count}
+    # WHY: Keep Slinky's NoExecute taint OFF so the GPU operator's device
+    # plugin, toolkit, DCGM exporter, and NFD worker DaemonSets can run on
+    # GPU nodes. The Nebius marketplace GPU operator ships standard
+    # tolerations (nvidia.com/gpu:NoSchedule) but does not tolerate Slinky's
+    # private NoExecute taint. Without these DaemonSets the nodes never gain
+    # the nvidia.com/gpu allocatable resource that slurmd then requests, and
+    # Slurm reports nodes as "gres/gpu count reported lower than configured
+    # (0 < 8)". Non-Slurm workload isolation on GPU nodes is already enforced
+    # by our role=gpu-worker nodeSelector on slurmd plus Slurm's own GRES
+    # scheduling — K8s is the substrate, not the scheduler.
+    taintKubeNodes: false
+
+    # WHY: extraConfMap flows into slurmd's --conf argument, which in turn
+    # becomes the node-specific attributes on the NodeName line. Gres=gpu:8
+    # tells Slurm this node exposes 8 GPUs; combined with AutoDetect=nvidia
+    # in gres.conf, slurmd reconciles this against the real device inventory.
+    extraConfMap:
+      Gres: "gpu:8"
+
+    slurmd:
+      # WHY: slurmd image pinned explicitly because renaming the nodeset key
+      # from 'slinky' to 'gpu' bypasses the chart's per-key default merge —
+      # Helm's `required` validator fires on the missing image.repository
+      # otherwise. Using the Slinky -pyxis variant so srun steps on GPU
+      # workers can launch OCI containers via Enroot, matching the login
+      # pod's runtime capability.
+      # Reference: https://github.com/SlinkyProject/slurm-operator/blob/v1.1.0/docs/usage/pyxis.md
+      image:
+        repository: ghcr.io/slinkyproject/slurmd-pyxis
+        tag: 25.11-ubuntu24.04
+      # WHY (nvidia.com/gpu): Enroot's NVIDIA hooks (50-mig-config.sh,
+      # 98-nvidia.sh, 99-mellanox.sh) run at container start and expect
+      # nvidia-smi + libcuda.so etc. to be available in the slurmd pod's
+      # filesystem. On Nebius MK8s the driver userspace is injected by the
+      # nvidia-container-toolkit runtime class only when a pod requests
+      # nvidia.com/gpu resources. Without this request, slurmd sees /dev/nvidia*
+      # but not nvidia-smi, and every `srun --container-image=...` fails at
+      # container start with "Command not found: nvidia-smi". Requesting all 8
+      # GPUs makes K8s hand the full set to slurmd, which then sub-allocates
+      # per-step via GRES. Matches Soperator's pattern
+      # (soperator/modules/slurm/templates/helm_values/flux_release_nodesets.yaml.tftpl:53-60
+      # sets slurmd.resources.gpu from the node preset).
+      resources:
+        requests:
+          nvidia.com/gpu: 8
+        limits:
+          nvidia.com/gpu: 8
+      # WHY (privileged): Enroot's 98-nvidia.sh hook calls nvidia-container-cli
+      # which bind-mounts host driver sockets into the enroot container at
+      # pyxis start time. Those bind mounts require CAP_SYS_ADMIN, which
+      # rootless slurmd pods lack. Without privileged=true every
+      # `srun --container-image=...` with GPUs fails at container start. The
+      # login pod already uses privileged for the same reason. For a 500-GPU
+      # customer this matches the canonical Slurm operational posture:
+      # slurmd is always privileged in production.
+      securityContext:
+        privileged: true
+      # WHY (postStart enroot hook patch): even with privileged=true, Enroot's
+      # nvidia-container-cli invocation fails to bind-mount
+      # /run/nvidia-persistenced/socket and /run/nvidia-fabricmanager/socket
+      # because Enroot uses user namespaces internally, which have stricter
+      # mount rules than the outer privileged container. The symptom is
+      # "operation not permitted" at every GPU-container start. The fix is to
+      # pass --no-persistenced and --no-fabricmanager to nvidia-container-cli,
+      # which the upstream hook (98-nvidia.sh) supports as CLI flags but
+      # doesn't pass by default. This postStart exec patches cli_args idempotently
+      # on every slurmd pod start so containerized Slurm steps (validator
+      # NCCL/IB checks, user training workloads via Pyxis) work immediately.
+      # The production-canonical version of this fix is a custom slurmd image
+      # with the hook pre-patched; for the PoC we patch at runtime so the
+      # vendor image stays upstream-tracked.
+      lifecycle:
+        postStart:
+          exec:
+            command:
+              - /bin/bash
+              - -c
+              - |
+                # Enroot hook patch (see "Enroot's 98-nvidia.sh hook patch"
+                # comment above). GPU-container startup fix; not IB-specific —
+                # persistenced/fabricmanager sockets are mounted by the NVIDIA
+                # runtime regardless of the underlying fabric, and enroot's
+                # user-namespace re-entry still refuses them.
+                grep -q '"--no-persistenced"' /etc/enroot/hooks.d/98-nvidia.sh || \
+                  sed -i 's|cli_args=("--no-cgroups"|cli_args=("--no-cgroups" "--no-persistenced" "--no-fabricmanager"|' /etc/enroot/hooks.d/98-nvidia.sh
+
+                # WHY (no prlimit memlock): Path A's Ethernet-only NCCL uses
+                # kernel TCP buffers, not libibverbs pinned memory, so the
+                # 8 MiB kubelet default is fine. The previous prlimit call
+                # lives on in git tag path-a-ib-working-v1 if IB ever comes
+                # back to this path.
+      # WHY (Ethernet NCCL env on slurmd): see the matching block on the
+      # login container above. Same canonical Ethernet-only NCCL socket
+      # tuning so interactive srun and batch jobs get identical defaults.
+      env:
+        - name: NCCL_IB_DISABLE
+          value: "1"
+        - name: NCCL_SOCKET_IFNAME
+          value: "=eth0"
+        - name: NCCL_SOCKET_NTHREADS
+          value: "4"
+        - name: NCCL_NSOCKS_PERTHREAD
+          value: "4"
+        - name: NCCL_P2P_LEVEL
+          value: "NVL"
+      volumeMounts:
+        - name: nfs-home
+          mountPath: /nfs/home
+        - name: nfs-shared
+          mountPath: /nfs/shared
+        # WHY (dshm): NCCL uses /dev/shm for its intra-node shared-memory
+        # transport during multi-rank allreduce. The kubelet default of
+        # 64 MiB is orders of magnitude too small for 8-rank-per-node work.
+        # Mounting a Memory-medium emptyDir gives tmpfs bounded by node RAM,
+        # matching Nebius's canonical pattern
+        # (modules/nccl-test/files/helm/nccl-test/templates/
+        # nccl-test-h100.yaml:68-72). Pyxis containers launched via
+        # --container-mounts=/dev/shm:/dev/shm will then inherit the
+        # larger tmpfs for their own UCX buffer allocations.
+        - name: dshm
+          mountPath: /dev/shm
+
+    logfile:
+      # WHY: logfile sidecar image pinned for the same per-key merge reason as
+      # slurmd. Matches the chart default (alpine:latest).
+      image:
+        repository: docker.io/library/alpine
+        tag: latest
+
+    podSpec:
+      nodeSelector:
+        kubernetes.io/os: linux
+        role: gpu-worker
+      volumes:
+        - name: nfs-home
+          nfs:
+            server: ${nfs_server_ip}
+            path: /nfs/home
+        - name: nfs-shared
+          nfs:
+            server: ${nfs_server_ip}
+            path: /nfs/shared
+        # Memory-backed emptyDir for /dev/shm (see slurmd volumeMounts note).
+        - name: dshm
+          emptyDir:
+            medium: Memory

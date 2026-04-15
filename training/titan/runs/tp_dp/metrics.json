@@ -1,0 +1,35 @@
+{
+  "config": "tp_dp",
+  "slurm_job": 42,
+  "strategy": "TP + DP (Tensor Parallel + Data Parallel replica)",
+  "parallelism": {
+    "tensor_parallel_degree": 2,
+    "data_parallel_shard_degree": 1,
+    "data_parallel_replicate_degree": 8,
+    "pipeline_parallel_degree": 1,
+    "tp_heads_constraint": "tp_degree must divide 32 (Llama-3.1-8B attention heads)"
+  },
+  "model": "meta-llama/Llama-3.1-8B",
+  "dataset": "allenai/c4 (streaming)",
+  "training": {
+    "steps": 60,
+    "seq_len": 4096,
+    "local_batch_size": 1,
+    "dtype": "bfloat16"
+  },
+  "tokens_per_step_cluster": 32768,
+  "total_tokens": 1966080,
+  "wall_clock_step1_to_completed_s": 67.88,
+  "tokens_per_sec_per_gpu": 2660,
+  "mfu_percent": 13.84,
+  "memory_max_reserved_percent": 40.4,
+  "loss_first": 12.252,
+  "loss_last": 8.026,
+  "training_decreased": true,
+  "checkpoint_step": 60,
+  "checkpoint_format": "DCP (cross-world-size resharding supported)",
+  "note": "TP communication overhead dominates at 16 GPUs; TP is illustrative for the scaling matrix \u2014 its value grows with parameter count (\u226570B where activations exceed single-GPU HBM). At LLaMA-3.1-8B it measurably underperforms pure data-parallel sharding. The TP groups here are NOT aligned to node boundaries (TP=2 \u00d7 DP_replicate=8 on 2 nodes spreads TP ranks across NVLink + IB edges); a node-aligned variant would set tensor_parallel_degree=8 + data_parallel_replicate_degree=2 at a materially different communication cost.",
+  "wall_clock_includes": "step 1 start through Training completed (includes step-0 compile/warmup + step-60 checkpoint save + teardown)",
+  "tokens_per_sec_per_gpu_window": "steady-state window (TorchTitan internal throughput counter, excludes compile/warmup); back-of-envelope (total_tokens / wall_clock) is lower and not directly comparable",
+  "mfu_formula": "(tokens_per_sec_per_gpu * 4.8e10 flops/token) / 9.89e14 flops/gpu  # H200 BF16 peak, Llama-3.1-8B 6*P forward+backward"
+}

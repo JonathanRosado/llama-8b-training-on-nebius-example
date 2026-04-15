@@ -1,0 +1,948 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: training-scripts
+data:
+  training__fsdp_demo.py: |
+    #!/usr/bin/env python3
+    """Minimal FSDP2 demo training run for the Path A Nebius PoC.
+    
+    Purpose:
+        Prove end-to-end that the Slurm+Slinky cluster built under
+        terraform/path-a/ can run a canonical distributed-training workload
+        using:
+          * torchrun for rank bootstrap
+          * PyTorch 2.x FSDP2 for fully-sharded data parallelism
+          * NCCL over InfiniBand for gradient all-reduce
+          * Shared NFS for checkpoint durability across ranks
+    
+        The model is intentionally tiny (~125M) so the demo fits in a short
+        Slurm step and the validator exit criteria (loss decreasing over
+        ≥20 steps, checkpoint written, job exit 0) are hit within minutes,
+        not hours. The same pipeline shape scales to 100B+ parameter runs
+        on the customer's 500+ GPU production cluster by swapping the
+        model factory and batch size.
+    
+    Run via: training/sbatch/fsdp_demo.sbatch (torchrun launches one
+    instance of this script per GPU across both nodes).
+    """
+    import argparse
+    import datetime
+    import json
+    import os
+    import sys
+    import time
+    from pathlib import Path
+    
+    import torch
+    import torch.distributed as dist
+    import torch.nn as nn
+    # WHY (FSDP v1 API): `fully_shard` (FSDP2) is not present in every
+    # pytorch NVIDIA-container release — nvcr.io/nvidia/pytorch:24.12-py3
+    # ships torch 2.6.0a with the old FSDP v1 API only. FullyShardedDataParallel
+    # is stable since torch 1.12 and works the same way across every
+    # PyTorch we'd hand a customer for a 500+ GPU run.
+    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+    from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+    import functools
+    
+    
+    def log(msg):
+        rank = int(os.environ.get("RANK", "0"))
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        print(f"[{ts}] rank={rank} {msg}", flush=True)
+    
+    
+    class TinyTransformer(nn.Module):
+        """~125M param transformer — small enough to train quickly, large
+        enough to exercise FSDP sharding and cross-GPU NCCL traffic."""
+    
+        def __init__(self, vocab_size=32000, hidden=768, n_layers=12, n_heads=12):
+            super().__init__()
+            self.embed = nn.Embedding(vocab_size, hidden)
+            # Standard TransformerEncoder; FSDP will shard each layer's
+            # parameters across ranks.
+            encoder_layer = nn.TransformerEncoderLayer(
+                d_model=hidden,
+                nhead=n_heads,
+                dim_feedforward=hidden * 4,
+                batch_first=True,
+                activation="gelu",
+            )
+            self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
+            self.head = nn.Linear(hidden, vocab_size)
+    
+        def forward(self, tokens):
+            x = self.embed(tokens)
+            x = self.encoder(x)
+            return self.head(x)
+    
+    
+    def main(args):
+        rank = int(os.environ["RANK"])
+        world = int(os.environ["WORLD_SIZE"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        device = torch.device(f"cuda:{local_rank}")
+        torch.cuda.set_device(device)
+    
+        log(f"init world={world} local_rank={local_rank} device={device}")
+        dist.init_process_group(backend="nccl", device_id=device)
+    
+        model = TinyTransformer().to(device)
+        # WHY (auto_wrap_policy on TransformerEncoderLayer): FSDP v1 groups
+        # parameters into "units" that are all-gathered together. Wrapping
+        # each encoder layer as its own unit gives per-layer all-gather/scatter,
+        # matching FSDP2's fully_shard semantics. Without a wrap policy FSDP
+        # wraps the root only, which loses the memory benefit.
+        auto_wrap_policy = functools.partial(
+            transformer_auto_wrap_policy,
+            transformer_layer_cls={nn.TransformerEncoderLayer},
+        )
+        fsdp_model = FSDP(model, auto_wrap_policy=auto_wrap_policy, device_id=device)
+    
+        optimizer = torch.optim.AdamW(fsdp_model.parameters(), lr=args.lr, weight_decay=0.1)
+        loss_fn = nn.CrossEntropyLoss()
+    
+        losses = []
+        torch.manual_seed(args.seed + rank)
+        batch_size = args.batch_size
+        seq_len = args.seq_len
+        vocab = 32000
+    
+        log(f"training {args.steps} steps, bsz={batch_size}, seq={seq_len}")
+        fsdp_model.train()
+        step_start = time.perf_counter()
+    
+        for step in range(args.steps):
+            # Synthetic causal-LM style batch: random tokens, target = shift-1.
+            tokens = torch.randint(0, vocab, (batch_size, seq_len), device=device)
+            targets = torch.roll(tokens, shifts=-1, dims=-1)
+    
+            optimizer.zero_grad(set_to_none=True)
+            logits = fsdp_model(tokens)
+            loss = loss_fn(logits.reshape(-1, vocab), targets.reshape(-1))
+            loss.backward()
+            optimizer.step()
+    
+            # All-reduce the loss across ranks for reporting.
+            loss_val = loss.detach().clone()
+            dist.all_reduce(loss_val, op=dist.ReduceOp.AVG)
+            losses.append(loss_val.item())
+    
+            if rank == 0:
+                elapsed = time.perf_counter() - step_start
+                log(f"step {step:3d}/{args.steps} loss={loss_val.item():.4f} elapsed={elapsed:.1f}s")
+    
+        total_elapsed = time.perf_counter() - step_start
+    
+        # Sharded checkpoint — each rank saves its own shard to
+        # rank-named files. This is the production-canonical pattern for
+        # 500+ GPU clusters (full gathers don't scale). For smaller demos
+        # we could gather to rank 0, but that path hit a hang with FSDP v1's
+        # StateDictType.FULL_STATE_DICT on this container. Sharded is faster
+        # and matches `torch.distributed.checkpoint`'s default writer shape.
+        ckpt_dir = Path(args.checkpoint_dir)
+        if rank == 0:
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+        dist.barrier()
+    
+        shard = fsdp_model.state_dict()  # each rank's local shard
+        shard_file = ckpt_dir / f"shard_rank{rank:02d}.pt"
+        torch.save(shard, shard_file)
+        log(f"wrote shard {shard_file.name} ({sum(p.numel() for p in shard.values()):d} params)")
+    
+        dist.barrier()
+    
+        if rank == 0:
+            # Compute whether loss decreased over the last 10 steps using a
+            # tolerance band rather than strict monotonicity — stochastic
+            # gradient noise makes strict step-by-step decrease unrealistic
+            # even in healthy training. The meaningful signal is that the
+            # net trend is downward.
+            last10 = losses[-10:] if len(losses) >= 10 else losses
+            net_last10_decrease = last10[0] - last10[-1] if last10 else 0.0
+            overall_decrease = losses[0] - losses[-1] if losses else 0.0
+    
+            metrics = {
+                "steps": args.steps,
+                "world_size": world,
+                "batch_size": batch_size,
+                "seq_len": seq_len,
+                "losses": losses,
+                "first_loss": losses[0] if losses else None,
+                "last_loss": losses[-1] if losses else None,
+                "last10_losses": last10,
+                "net_last10_decrease": round(net_last10_decrease, 4),
+                "overall_decrease": round(overall_decrease, 4),
+                "training_decreased": overall_decrease > 0 and net_last10_decrease > 0,
+                "total_elapsed_seconds": round(total_elapsed, 2),
+                "tokens_per_second_per_rank": round(
+                    (batch_size * seq_len * args.steps) / total_elapsed, 1
+                ),
+                "gpu_name": torch.cuda.get_device_name(0),
+                "num_shards": world,
+            }
+            with open(ckpt_dir / "metrics.json", "w") as f:
+                json.dump(metrics, f, indent=2)
+            log(f"wrote {ckpt_dir}/metrics.json + {world} sharded model files")
+            log(f"first_loss={metrics['first_loss']:.4f} last_loss={metrics['last_loss']:.4f}")
+            log(f"training_decreased={metrics['training_decreased']}")
+    
+        dist.barrier()
+        dist.destroy_process_group()
+        log("done")
+    
+    
+    if __name__ == "__main__":
+        p = argparse.ArgumentParser()
+        p.add_argument("--steps", type=int, default=30)
+        p.add_argument("--batch-size", type=int, default=4)
+        p.add_argument("--seq-len", type=int, default=512)
+        p.add_argument("--lr", type=float, default=3e-4)
+        p.add_argument("--seed", type=int, default=42)
+        p.add_argument(
+            "--checkpoint-dir",
+            type=str,
+            default=os.environ.get(
+                "CHECKPOINT_DIR",
+                f"/nfs/shared/checkpoints/fsdp_demo/{os.environ.get('SLURM_JOB_ID', 'manual')}",
+            ),
+        )
+        args = p.parse_args()
+        sys.exit(main(args) or 0)
+  training__nccl_bench.py: |
+    #!/usr/bin/env python3
+    """Multi-node NCCL allreduce bandwidth benchmark — torchrun launched.
+    
+    Purpose:
+        The multi-node NCCL check in validator/validate.py used to launch
+        `all_reduce_perf_mpi` via `srun --mpi=pmix`, which pulls in the
+        hpc-benchmarks container's HPC-X MPI + UCX stack. On Path A's
+        Ethernet-only cluster that stack fails to initialize multi-node
+        (UCX looks for IB HCAs and can't find a fabric).
+    
+        This script replaces that benchmark with the production-canonical
+        pattern for 500+ GPU Ethernet customers:
+          * torchrun handles rank discovery and GPU binding
+          * torch.distributed(backend="nccl") drives NCCL directly
+          * NCCL uses sockets (per env vars set in the sbatch/_srun_container)
+          * We measure bus bandwidth at several message sizes using the
+            same formula nccl-tests uses: busbw = size * 2 * (N-1) / N / time
+    
+        The last line printed on rank 0 is a single-line JSON:
+            NCCL_BENCH_RESULT={"world_size": N, "sizes": [...], "avg_busbw_gbps": X}
+        The validator parses that line to compute its verdict.
+    
+    Launch via:
+        torchrun --nnodes=N --nproc-per-node=8 \
+            --rdzv-id=$SLURM_JOB_ID --rdzv-backend=c10d \
+            --rdzv-endpoint=$MASTER_ADDR:29500 \
+            /nfs/home/training/nccl_bench.py --min-bytes 536870912 --max-bytes 8589934592 --factor 2
+    """
+    import argparse
+    import datetime
+    import json
+    import os
+    import sys
+    import time
+    
+    import torch
+    import torch.distributed as dist
+    
+    
+    def log(msg):
+        rank = int(os.environ.get("RANK", "0"))
+        ts = datetime.datetime.now().strftime("%H:%M:%S")
+        print(f"[{ts}] rank={rank} {msg}", flush=True)
+    
+    
+    def main(args):
+        rank = int(os.environ["RANK"])
+        world = int(os.environ["WORLD_SIZE"])
+        local_rank = int(os.environ["LOCAL_RANK"])
+        device = torch.device(f"cuda:{local_rank}")
+        torch.cuda.set_device(device)
+    
+        dist.init_process_group(backend="nccl", device_id=device)
+        if rank == 0:
+            log(f"initialized world={world} backend=nccl")
+    
+        # Build the size sweep: powers of `factor` from min_bytes up to max_bytes.
+        sizes = []
+        s = args.min_bytes
+        while s <= args.max_bytes:
+            sizes.append(s)
+            s *= args.factor
+    
+        results = []
+        for size_bytes in sizes:
+            elem = size_bytes // 4  # float32
+            tensor = torch.ones(elem, dtype=torch.float32, device=device)
+    
+            # Warmup.
+            for _ in range(args.warmup):
+                dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+            torch.cuda.synchronize()
+    
+            # Timed.
+            dist.barrier()
+            start = time.perf_counter()
+            for _ in range(args.iters):
+                dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+            torch.cuda.synchronize()
+            elapsed = (time.perf_counter() - start) / args.iters
+    
+            # nccl-tests busbw formula for allreduce (ring):
+            #   algbw = size / time (GB/s)
+            #   busbw = algbw * 2 * (N-1) / N
+            algbw_gbps = (size_bytes / elapsed) / 1e9
+            busbw_gbps = algbw_gbps * 2.0 * (world - 1) / world
+    
+            if rank == 0:
+                log(f"size={size_bytes:>12d} B  time={elapsed*1e6:>8.1f} us  "
+                    f"algbw={algbw_gbps:>6.2f} GB/s  busbw={busbw_gbps:>6.2f} GB/s")
+            results.append({
+                "bytes": size_bytes,
+                "time_us": round(elapsed * 1e6, 2),
+                "algbw_gbps": round(algbw_gbps, 3),
+                "busbw_gbps": round(busbw_gbps, 3),
+            })
+    
+        if rank == 0:
+            avg_busbw = sum(r["busbw_gbps"] for r in results) / len(results)
+            # Single-line JSON for the validator to parse.
+            result = {
+                "world_size": world,
+                "iters": args.iters,
+                "warmup": args.warmup,
+                "sizes": results,
+                "avg_busbw_gbps": round(avg_busbw, 3),
+            }
+            print(f"NCCL_BENCH_RESULT={json.dumps(result, separators=(',', ':'))}", flush=True)
+    
+        dist.barrier()
+        dist.destroy_process_group()
+    
+    
+    if __name__ == "__main__":
+        p = argparse.ArgumentParser()
+        p.add_argument("--min-bytes", type=int, default=512 * 1024 * 1024)
+        p.add_argument("--max-bytes", type=int, default=8 * 1024 * 1024 * 1024)
+        p.add_argument("--factor", type=int, default=2)
+        p.add_argument("--warmup", type=int, default=3)
+        p.add_argument("--iters", type=int, default=10)
+        args = p.parse_args()
+        sys.exit(main(args) or 0)
+  training__titan__launch.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CONFIG_NAME="${1:?usage: ./launch.sh <config_name> [--print-only]}"
+    MODE="${2:-submit}"
+    CONFIG_FILE="${ROOT_DIR}/configs/${CONFIG_NAME}.toml"
+    
+    if [[ ! -f "${CONFIG_FILE}" ]]; then
+      echo "config not found: ${CONFIG_FILE}" >&2
+      exit 1
+    fi
+    
+    SBATCH_FILE="$(mktemp "/tmp/${CONFIG_NAME}.XXXXXX.sbatch")"
+    trap 'rm -f "${SBATCH_FILE}"' EXIT
+    
+    python3 - "${CONFIG_FILE}" > "${SBATCH_FILE}" <<'PY'
+    import json
+    import shlex
+    import sys
+    import tomllib
+    
+    
+    def shell_join(parts):
+        return " ".join(shlex.quote(str(part)) for part in parts)
+    
+    
+    def bool_flag(path, value):
+        head, tail = path.rsplit(".", 1)
+        return f"--{head}.{tail}" if value else f"--{head}.no_{tail}"
+    
+    
+    def flatten_cli(prefix, data):
+        parts = []
+        for key, value in data.items():
+            path = f"{prefix}.{key}"
+            if isinstance(value, dict):
+                parts.extend(flatten_cli(path, value))
+            elif isinstance(value, bool):
+                parts.append(bool_flag(path, value))
+            elif isinstance(value, list):
+                joined = ",".join(str(item) for item in value)
+                parts.extend([f"--{path}", joined])
+            elif value is None:
+                continue
+            else:
+                parts.extend([f"--{path}", value])
+        return parts
+    
+    
+    with open(sys.argv[1], "rb") as handle:
+        cfg = tomllib.load(handle)
+    
+    module = cfg["module"]
+    config_name = cfg["config"]
+    slurm = cfg["slurm"]
+    paths = cfg["paths"]
+    env = cfg.get("env", {})
+    
+    job_name = slurm["job_name"]
+    nodes = slurm["nodes"]
+    ntasks_per_node = slurm["ntasks_per_node"]
+    gpus_per_node = slurm["gpus_per_node"]
+    cpus_per_task = slurm["cpus_per_task"]
+    time_limit = slurm["time"]
+    
+    repo = paths["repo"]
+    hf_assets_path = paths["hf_assets_path"]
+    run_root = paths["run_root"]
+    metrics_dirname = paths.get("metrics_dirname", "metrics")
+    
+    tt_args = [
+        "--module",
+        module,
+        "--config",
+        config_name,
+        "--hf_assets_path",
+        hf_assets_path,
+    ]
+    
+    for section in (
+        "training",
+        "dataloader",
+        "parallelism",
+        "checkpoint",
+        "metrics",
+        "profiling",
+        "validator",
+        "debug",
+        "compile",
+        "comm",
+        "activation_checkpoint",
+    ):
+        if section in cfg:
+            tt_args.extend(flatten_cli(section, cfg[section]))
+    
+    tt_command = (
+        "/home/nebius/venv/bin/torchrun "
+        f"--nnodes={nodes} "
+        f"--nproc-per-node={gpus_per_node} "
+        "--rdzv-backend=c10d "
+        "--rdzv-id=${JOBID} "
+        "--rdzv-endpoint=${MASTER_ADDR}:${MASTER_PORT} "
+        + shell_join(["-m", "torchtitan.train", *tt_args])
+    )
+    
+    env_exports = "\n".join(
+        f"export {key}={shlex.quote(str(value))}" for key, value in sorted(env.items())
+    )
+    
+    script = f"""#!/bin/bash
+    #SBATCH --job-name={job_name}
+    #SBATCH --output={run_root}/%j/slurm.out
+    #SBATCH --error={run_root}/%j/slurm.out
+    #SBATCH --nodes={nodes}
+    #SBATCH --ntasks-per-node={ntasks_per_node}
+    #SBATCH --gpus-per-node={gpus_per_node}
+    #SBATCH --cpus-per-task={cpus_per_task}
+    #SBATCH --mem=0
+    #SBATCH --time={time_limit}
+    #SBATCH --export=ALL
+    
+    set -euo pipefail
+    
+    JOBID="${{SLURM_JOB_ID:-manual}}"
+    MASTER_ADDR=$(scontrol show hostnames "${{SLURM_JOB_NODELIST}}" | head -n 1)
+    MASTER_PORT=29500
+    RUN_DIR="{run_root}/${{JOBID}}"
+    mkdir -p "${{RUN_DIR}}/{metrics_dirname}"
+    cd {shlex.quote(repo)}
+    
+    unset NCCL_IB_DISABLE
+    unset NCCL_SOCKET_IFNAME
+    {env_exports}
+    
+    export LOG_RANK=0
+    export TORCHFT_LIGHTHOUSE=http://localhost:29510
+    export TITAN_RUN_DIR="${{RUN_DIR}}"
+    export JOBID MASTER_ADDR MASTER_PORT
+    
+    srun bash -lc '
+    set -euo pipefail
+    cd {shlex.quote(repo)}
+    {tt_command} \
+      --dump_folder "${{TITAN_RUN_DIR}}"
+    '
+    """
+    
+    print(script)
+    PY
+    
+    if [[ "${MODE}" == "--print-only" ]]; then
+      cat "${SBATCH_FILE}"
+      exit 0
+    fi
+    
+    sbatch "${SBATCH_FILE}"
+  training__titan__mlflow_wrapper.py: |
+    #!/usr/bin/env python3
+    """Thin MLflow wrapper for TorchTitan training.
+    
+    This wrapper preserves the existing TorchTitan code path and runtime shape:
+    it starts an MLflow run, logs high-level run parameters, then monkeypatches
+    TorchTitan's TensorBoard logger so the same per-step metrics flowing to
+    TensorBoard are also forwarded to MLflow.
+    
+    Re-run note:
+        Once the Path B MLflow marketplace release is deployed and reachable,
+        re-run `fsdp_full` through this wrapper to verify the end-to-end path.
+    """
+    
+    from __future__ import annotations
+    
+    import argparse
+    import json
+    import os
+    import runpy
+    import sys
+    import time
+    from dataclasses import asdict, dataclass
+    from typing import Any
+    
+    
+    @dataclass
+    class WrapperResult:
+        status: str
+        tracking_uri: str | None
+        experiment_name: str
+        run_name: str | None
+        run_id: str | None
+        rank: int
+        forwarded_metric_keys: list[str]
+        torchtitan_argv: list[str]
+        duration_s: float
+    
+    
+    def _parse_args() -> tuple[argparse.Namespace, list[str]]:
+        parser = argparse.ArgumentParser(
+            description="Wrap torchtitan.train with MLflow run setup and metric forwarding."
+        )
+        parser.add_argument(
+            "--experiment-name",
+            default=os.environ.get("MLFLOW_EXPERIMENT_NAME", "torchtitan"),
+            help="MLflow experiment name.",
+        )
+        parser.add_argument(
+            "--run-name",
+            default=os.environ.get("MLFLOW_RUN_NAME"),
+            help="Optional MLflow run name. Defaults to the config name when present.",
+        )
+        parser.add_argument(
+            "--tracking-uri",
+            default=os.environ.get("MLFLOW_TRACKING_URI"),
+            help="MLflow tracking URI. Falls back to the environment variable.",
+        )
+        parser.add_argument(
+            "--dump-json",
+            action="store_true",
+            help="Print only the final JSON status payload.",
+        )
+        parser.add_argument(
+            "torchtitan_args",
+            nargs=argparse.REMAINDER,
+            help="Arguments forwarded to torchtitan.train. Prefix with -- to separate wrapper args.",
+        )
+        args = parser.parse_args()
+        forwarded = list(args.torchtitan_args)
+        if forwarded and forwarded[0] == "--":
+            forwarded = forwarded[1:]
+        if not forwarded:
+            parser.error("no TorchTitan arguments provided; pass them after '--'")
+        return args, forwarded
+    
+    
+    def _env_rank() -> int:
+        for key in ("RANK", "SLURM_PROCID", "LOCAL_RANK"):
+            value = os.environ.get(key)
+            if value is not None:
+                return int(value)
+        return 0
+    
+    
+    def _extract_params(argv: list[str]) -> dict[str, str]:
+        params: dict[str, str] = {"command": "python -m torchtitan.train"}
+        i = 0
+        while i < len(argv):
+            token = argv[i]
+            if not token.startswith("--"):
+                i += 1
+                continue
+            key = token[2:]
+            value = "true"
+            if "=" in key:
+                key, value = key.split("=", 1)
+            elif i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+                value = argv[i + 1]
+                i += 1
+            params[key] = value
+            i += 1
+        return params
+    
+    
+    def _default_run_name(explicit_name: str | None, params: dict[str, str]) -> str | None:
+        if explicit_name:
+            return explicit_name
+        config_name = params.get("config")
+        module_name = params.get("module")
+        if config_name and module_name:
+            return f"{module_name}:{config_name}"
+        return config_name or module_name
+    
+    
+    def _human_summary(result: WrapperResult) -> str:
+        metric_keys = ", ".join(result.forwarded_metric_keys) or "none"
+        return (
+            f"status={result.status} rank={result.rank} experiment={result.experiment_name} "
+            f"run_id={result.run_id or 'none'} metrics={metric_keys} duration_s={result.duration_s:.2f}"
+        )
+    
+    
+    def main() -> int:
+        args, torchtitan_args = _parse_args()
+        rank = _env_rank()
+        start = time.time()
+        params = _extract_params(torchtitan_args)
+        run_name = _default_run_name(args.run_name, params)
+        forwarded_metric_keys = [
+            "loss_metrics/global_avg_loss",
+            "loss_metrics/global_max_loss",
+            "grad_norm",
+            "throughput(tps)",
+            "tflops",
+            "mfu(%)",
+            "memory/max_reserved(GiB)",
+            "memory/max_reserved(%)",
+        ]
+    
+        if args.tracking_uri:
+            os.environ["MLFLOW_TRACKING_URI"] = args.tracking_uri
+    
+        sys.argv = ["torchtitan.train", *torchtitan_args]
+    
+        mlflow_run = None
+        active = rank == 0
+    
+        if active:
+            try:
+                import mlflow
+            except ModuleNotFoundError as exc:
+                raise SystemExit(
+                    "mlflow is not installed in the active Python environment; "
+                    "install it in the jail venv before using this wrapper."
+                ) from exc
+    
+            mlflow.set_experiment(args.experiment_name)
+            tags = {
+                "launcher": "training/titan/mlflow_wrapper.py",
+                "framework": "torchtitan",
+                "scheduler": "slurm" if os.environ.get("SLURM_JOB_ID") else "local",
+            }
+            if os.environ.get("SLURM_JOB_ID"):
+                tags["slurm.job_id"] = os.environ["SLURM_JOB_ID"]
+            mlflow_run = mlflow.start_run(run_name=run_name)
+            mlflow.set_tags(tags)
+            mlflow.log_params(params)
+    
+            from torchtitan.components import metrics as titan_metrics
+    
+            original_log = titan_metrics.TensorBoardLogger.log
+    
+            def patched_log(self: Any, metrics: dict[str, Any], step: int) -> None:
+                original_log(self, metrics, step)
+                filtered = {
+                    key: value
+                    for key, value in metrics.items()
+                    if isinstance(value, (int, float))
+                    and key in forwarded_metric_keys
+                }
+                if filtered:
+                    mlflow.log_metrics(filtered, step=step)
+    
+            titan_metrics.TensorBoardLogger.log = patched_log
+    
+        run_id = None
+        try:
+            runpy.run_module("torchtitan.train", run_name="__main__")
+        except SystemExit as exc:
+            if exc.code is None:
+                exit_code = 0
+            elif isinstance(exc.code, int):
+                exit_code = exc.code
+            else:
+                exit_code = 1
+        else:
+            exit_code = 0
+        finally:
+            if mlflow_run is not None:
+                import mlflow
+    
+                run_id = mlflow_run.info.run_id
+                if exit_code == 0:
+                    mlflow.set_tag("run_status", "completed")
+                else:
+                    mlflow.set_tag("run_status", f"failed:{exit_code}")
+                mlflow.end_run(status="FINISHED" if exit_code == 0 else "FAILED")
+    
+        result = WrapperResult(
+            status="ok" if exit_code == 0 else "error",
+            tracking_uri=args.tracking_uri or os.environ.get("MLFLOW_TRACKING_URI"),
+            experiment_name=args.experiment_name,
+            run_name=run_name,
+            run_id=run_id,
+            rank=rank,
+            forwarded_metric_keys=forwarded_metric_keys,
+            torchtitan_argv=torchtitan_args,
+            duration_s=time.time() - start,
+        )
+        payload = json.dumps(asdict(result), indent=2, sort_keys=True)
+        if args.dump_json:
+            print(payload)
+        else:
+            print(_human_summary(result))
+            print(payload)
+        return exit_code
+    
+    
+    if __name__ == "__main__":
+        raise SystemExit(main())
+  training__titan__configs__fsdp_full.toml: |
+    # TorchTitan pinned main SHA: 74485ea3381d7c1739b004daace3d9ecaead67e9
+    # Basis: torchtitan.models.llama3.config_registry.llama3_8b()
+    # Strategy: 16-rank FSDP2 baseline on Path B (2 nodes x 8 H200, InfiniBand)
+    
+    module = "llama3"
+    config = "llama3_8b"
+    
+    [slurm]
+    job_name = "tt-fsdp-full"
+    nodes = 2
+    ntasks_per_node = 1
+    gpus_per_node = 8
+    cpus_per_task = 32
+    time = "00:45:00"
+    
+    [paths]
+    repo = "/home/nebius/training/titan/torchtitan"
+    hf_assets_path = "/home/nebius/.cache/huggingface/assets/Llama-3.1-8B"
+    dataset_path = "/mnt/datasets/c4"
+    run_root = "/home/nebius/training-runs/fsdp_full"
+    checkpoint_dirname = "checkpoints"
+    metrics_dirname = "metrics"
+    
+    [env]
+    NCCL_IB_HCA = "mlx5"
+    NCCL_IB_GID_INDEX = "3"
+    TORCH_NCCL_ASYNC_ERROR_HANDLING = "1"
+    PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
+    
+    [training]
+    local_batch_size = 1
+    seq_len = 4096
+    steps = 60
+    dtype = "bfloat16"
+    mixed_precision_param = "bfloat16"
+    mixed_precision_reduce = "float32"
+    gc_freq = 200
+    
+    [dataloader]
+    dataset = "c4_parquet"
+    dataset_path = "/mnt/datasets/c4"
+    num_workers = 2
+    pin_memory = false
+    
+    [parallelism]
+    data_parallel_replicate_degree = 1
+    data_parallel_shard_degree = -1
+    tensor_parallel_degree = 1
+    pipeline_parallel_degree = 1
+    
+    [checkpoint]
+    enable = true
+    folder = "checkpoints"
+    interval = 1000
+    last_save_model_only = true
+    
+    [metrics]
+    log_freq = 5
+    enable_tensorboard = true
+    save_tb_folder = "metrics"
+    
+    [profiling]
+    enable_profiling = false
+    profile_freq = 1000000
+    
+    [validator]
+    enable = false
+    freq = 1000000
+    steps = 1
+    
+    [debug]
+    print_config = true
+    save_config_file = "resolved-config.json"
+  training__titan__configs__hsdp.toml: |
+    # TorchTitan pinned main SHA: 74485ea3381d7c1739b004daace3d9ecaead67e9
+    # Basis: torchtitan.models.llama3.config_registry.llama3_8b()
+    # Strategy: HSDP with 2 replica groups x 8-rank shard groups on 16 GPUs
+    
+    module = "llama3"
+    config = "llama3_8b"
+    
+    [slurm]
+    job_name = "tt-hsdp"
+    nodes = 2
+    ntasks_per_node = 1
+    gpus_per_node = 8
+    cpus_per_task = 32
+    time = "00:45:00"
+    
+    [paths]
+    repo = "/home/nebius/training/titan/torchtitan"
+    hf_assets_path = "/home/nebius/.cache/huggingface/assets/Llama-3.1-8B"
+    dataset_path = "/mnt/datasets/c4"
+    run_root = "/home/nebius/training-runs/hsdp"
+    checkpoint_dirname = "checkpoints"
+    metrics_dirname = "metrics"
+    
+    [env]
+    NCCL_IB_HCA = "mlx5"
+    NCCL_IB_GID_INDEX = "3"
+    TORCH_NCCL_ASYNC_ERROR_HANDLING = "1"
+    PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
+    
+    [training]
+    local_batch_size = 1
+    seq_len = 4096
+    steps = 60
+    dtype = "bfloat16"
+    mixed_precision_param = "bfloat16"
+    mixed_precision_reduce = "float32"
+    gc_freq = 200
+    
+    [dataloader]
+    dataset = "c4_parquet"
+    dataset_path = "/mnt/datasets/c4"
+    num_workers = 2
+    pin_memory = false
+    
+    [parallelism]
+    data_parallel_replicate_degree = 2
+    data_parallel_shard_degree = 8
+    tensor_parallel_degree = 1
+    pipeline_parallel_degree = 1
+    
+    [checkpoint]
+    enable = true
+    folder = "checkpoints"
+    interval = 1000
+    last_save_model_only = true
+    
+    [metrics]
+    log_freq = 5
+    enable_tensorboard = true
+    save_tb_folder = "metrics"
+    
+    [profiling]
+    enable_profiling = false
+    profile_freq = 1000000
+    
+    [validator]
+    enable = false
+    freq = 1000000
+    steps = 1
+    
+    [debug]
+    print_config = true
+    save_config_file = "resolved-config.json"
+  training__titan__configs__tp_dp.toml: |
+    # TorchTitan pinned main SHA: 74485ea3381d7c1739b004daace3d9ecaead67e9
+    # Basis: torchtitan.models.llama3.config_registry.llama3_8b()
+    # Strategy: TP=2 plus replicated DP groups for a non-sharded tensor-parallel path
+    
+    module = "llama3"
+    config = "llama3_8b"
+    
+    [slurm]
+    job_name = "tt-tp-dp"
+    nodes = 2
+    ntasks_per_node = 1
+    gpus_per_node = 8
+    cpus_per_task = 32
+    time = "00:45:00"
+    
+    [paths]
+    repo = "/home/nebius/training/titan/torchtitan"
+    hf_assets_path = "/home/nebius/.cache/huggingface/assets/Llama-3.1-8B"
+    dataset_path = "/mnt/datasets/c4"
+    run_root = "/home/nebius/training-runs/tp_dp"
+    checkpoint_dirname = "checkpoints"
+    metrics_dirname = "metrics"
+    
+    [env]
+    NCCL_IB_HCA = "mlx5"
+    NCCL_IB_GID_INDEX = "3"
+    TORCH_NCCL_ASYNC_ERROR_HANDLING = "1"
+    TORCH_NCCL_AVOID_RECORD_STREAMS = "1"
+    PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True"
+    
+    [training]
+    local_batch_size = 1
+    seq_len = 4096
+    steps = 60
+    dtype = "bfloat16"
+    mixed_precision_param = "bfloat16"
+    mixed_precision_reduce = "float32"
+    gc_freq = 200
+    
+    [dataloader]
+    dataset = "c4_parquet"
+    dataset_path = "/mnt/datasets/c4"
+    num_workers = 2
+    pin_memory = false
+    
+    [parallelism]
+    data_parallel_replicate_degree = 8
+    data_parallel_shard_degree = 1
+    tensor_parallel_degree = 2
+    pipeline_parallel_degree = 1
+    enable_sequence_parallel = true
+    
+    [checkpoint]
+    enable = true
+    folder = "checkpoints"
+    interval = 1000
+    last_save_model_only = true
+    
+    [metrics]
+    log_freq = 5
+    enable_tensorboard = true
+    save_tb_folder = "metrics"
+    
+    [profiling]
+    enable_profiling = false
+    profile_freq = 1000000
+    
+    [validator]
+    enable = false
+    freq = 1000000
+    steps = 1
+    
+    [debug]
+    print_config = true
+    save_config_file = "resolved-config.json"

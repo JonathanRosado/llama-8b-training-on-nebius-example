@@ -1,0 +1,220 @@
+{
+  "provider_source": "terraform-provider.storage.eu-north1.nebius.cloud/nebius/nebius",
+  "provider_config_attributes": {
+    "address_options": {
+      "type": "nested",
+      "required": false,
+      "optional": true,
+      "description": "Set specific options for each address. Use \"\\*\" to set them for all addresses at once. Empty options will result in defa"
+    },
+    "address_template": {
+      "type": "nested",
+      "required": false,
+      "optional": true,
+      "description": "address template (overrides address_template_env)"
+    },
+    "address_template_env": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "env variable name to obtain address template in form of `FIND=REPLACE`"
+    },
+    "auth_timeout": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "timeout for each Nebius SDK request including authentication, default 15m0s, as a string: possibly signed sequence of de"
+    },
+    "domain": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "custom domain name (overrides domain_env)"
+    },
+    "domain_env": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "env variable name to obtain custom domain name"
+    },
+    "module_name": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "it is suggested to set this value to your module name if the provider is initialized in one, does not affect any behavio"
+    },
+    "no_credentials": {
+      "type": "bool",
+      "required": false,
+      "optional": true,
+      "description": "do not authenticate"
+    },
+    "parent_id": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "Parent ID if it is not read from the profile, or if you want to overwrite it."
+    },
+    "per_retry_timeout": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "timeout for each Nebius SDK request retry, default 20s, as a string: possibly signed sequence of decimal numbers, each w"
+    },
+    "profile": {
+      "type": "nested",
+      "required": false,
+      "optional": true,
+      "description": "Reads profile from the CLI config."
+    },
+    "resolvers": {
+      "type": [
+        "map",
+        "string"
+      ],
+      "required": false,
+      "optional": true,
+      "description": "resolver map of type `[pattern|service_id]->address`"
+    },
+    "resolvers_env": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "env variable name that holds resolver map (may be set alongside resolvers)"
+    },
+    "retries": {
+      "type": "number",
+      "required": false,
+      "optional": true,
+      "description": "number of retries for each Nebius SDK request, default 3"
+    },
+    "service_account": {
+      "type": "nested",
+      "required": false,
+      "optional": true,
+      "description": "sets service account credentials (is overridden by token)"
+    },
+    "timeout": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "timeout for each Nebius SDK request, default 1m0s, as a string: possibly signed sequence of decimal numbers, each with o"
+    },
+    "token": {
+      "type": "string",
+      "required": false,
+      "optional": true,
+      "description": "authenticate using this IAM token"
+    },
+    "versioned_ephemeral_values": {
+      "type": "dynamic",
+      "required": false,
+      "optional": true,
+      "description": "A map of all ephemeral values that will be passed to nebius_hash for hashing"
+    }
+  },
+  "resource_count": 42,
+  "data_source_count": 56,
+  "resources": [
+    "nebius_applications_v1alpha1_k8s_release",
+    "nebius_compute_v1_disk",
+    "nebius_compute_v1_filesystem",
+    "nebius_compute_v1_gpu_cluster",
+    "nebius_compute_v1_instance",
+    "nebius_compute_v1alpha1_disk",
+    "nebius_compute_v1alpha1_filesystem",
+    "nebius_compute_v1alpha1_gpu_cluster",
+    "nebius_compute_v1alpha1_instance",
+    "nebius_hash",
+    "nebius_iam_v1_access_permit",
+    "nebius_iam_v1_auth_public_key",
+    "nebius_iam_v1_federated_credentials",
+    "nebius_iam_v1_federation",
+    "nebius_iam_v1_federation_certificate",
+    "nebius_iam_v1_group",
+    "nebius_iam_v1_group_membership",
+    "nebius_iam_v1_invitation",
+    "nebius_iam_v1_service_account",
+    "nebius_iam_v2_access_key",
+    "nebius_iam_v2_project",
+    "nebius_mk8s_v1_cluster",
+    "nebius_mk8s_v1_node_group",
+    "nebius_mk8s_v1alpha1_cluster",
+    "nebius_mk8s_v1alpha1_node_group",
+    "nebius_msp_mlflow_v1alpha1_cluster",
+    "nebius_msp_postgresql_v1alpha1_cluster",
+    "nebius_mysterybox_v1_secret",
+    "nebius_mysterybox_v1_secret_version",
+    "nebius_quotas_v1_quota_allowance",
+    "nebius_registry_v1_registry",
+    "nebius_storage_v1_bucket",
+    "nebius_storage_v1alpha1_transfer",
+    "nebius_vpc_v1_allocation",
+    "nebius_vpc_v1_network",
+    "nebius_vpc_v1_pool",
+    "nebius_vpc_v1_route",
+    "nebius_vpc_v1_route_table",
+    "nebius_vpc_v1_security_group",
+    "nebius_vpc_v1_security_rule",
+    "nebius_vpc_v1_subnet",
+    "nebius_vpc_v1alpha1_allocation"
+  ],
+  "data_sources": [
+    "nebius_applications_v1alpha1_k8s_release",
+    "nebius_capacity_v1_capacity_block_group",
+    "nebius_compute_v1_disk",
+    "nebius_compute_v1_filesystem",
+    "nebius_compute_v1_gpu_cluster",
+    "nebius_compute_v1_image",
+    "nebius_compute_v1_instance",
+    "nebius_compute_v1alpha1_disk",
+    "nebius_compute_v1alpha1_filesystem",
+    "nebius_compute_v1alpha1_gpu_cluster",
+    "nebius_compute_v1alpha1_image",
+    "nebius_compute_v1alpha1_instance",
+    "nebius_dns_v1_record",
+    "nebius_dns_v1_zone",
+    "nebius_iam_v1_access_permit",
+    "nebius_iam_v1_auth_public_key",
+    "nebius_iam_v1_federated_credentials",
+    "nebius_iam_v1_federation",
+    "nebius_iam_v1_federation_certificate",
+    "nebius_iam_v1_group",
+    "nebius_iam_v1_group_membership",
+    "nebius_iam_v1_invitation",
+    "nebius_iam_v1_project",
+    "nebius_iam_v1_service_account",
+    "nebius_iam_v1_tenant",
+    "nebius_iam_v1_tenant_user_account",
+    "nebius_iam_v2_access_key",
+    "nebius_iam_v2_project",
+    "nebius_iam_v2_tenant",
+    "nebius_mk8s_v1_cluster",
+    "nebius_mk8s_v1_node_group",
+    "nebius_mk8s_v1alpha1_cluster",
+    "nebius_mk8s_v1alpha1_node_group",
+    "nebius_msp_mlflow_v1alpha1_cluster",
+    "nebius_msp_postgresql_v1alpha1_cluster",
+    "nebius_mysterybox_v1_secret",
+    "nebius_mysterybox_v1_secret_payload_entry",
+    "nebius_mysterybox_v1_secret_version",
+    "nebius_parent_id",
+    "nebius_quotas_v1_quota_allowance",
+    "nebius_registry_v1_registry",
+    "nebius_storage_v1_bucket",
+    "nebius_storage_v1alpha1_transfer",
+    "nebius_vpc_v1_allocation",
+    "nebius_vpc_v1_network",
+    "nebius_vpc_v1_pool",
+    "nebius_vpc_v1_route",
+    "nebius_vpc_v1_route_table",
+    "nebius_vpc_v1_security_group",
+    "nebius_vpc_v1_security_rule",
+    "nebius_vpc_v1_subnet",
+    "nebius_vpc_v1alpha1_allocation",
+    "nebius_vpc_v1alpha1_network",
+    "nebius_vpc_v1alpha1_pool",
+    "nebius_vpc_v1alpha1_scope",
+    "nebius_vpc_v1alpha1_subnet"
+  ]
+}
