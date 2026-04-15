@@ -48,3 +48,7 @@ Scope: four axes only. Evidence is limited to committed repo artifacts and live 
 ## Audit Verdict
 
 The live PoC is strongest on three axes: platform alignment, interconnect choice, and training-framework shape. The only material canonical gap is the observability/data layer above native TensorBoard: MLflow is selected but not deployed, and the C4 production path is documented but not yet implemented. That is defensible because the repo already distinguishes executed PoC evidence from target-state scale guidance instead of pretending those are the same thing.
+
+## Follow-up
+
+Flux Git authentication on Path B is bootstrapped with a read-only GitHub deploy key stored in the `flux-gitops-main-auth` Secret in `flux-system`. That is acceptable as an initial bootstrap for a PoC, but the staff-level follow-up is to migrate this Secret to SOPS-encrypted GitOps state before calling the design production-ready. The migration story is: keep the deploy key read-only, move the Secret manifest under Git with SOPS, and remove the out-of-band kubectl bootstrap once Flux can decrypt and reconcile it.

@@ -1,0 +1,22 @@
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: GitRepository
+metadata:
+  name: llama-training-source
+  namespace: flux-system
+spec:
+  interval: 1m
+  url: ssh://git@github.com/JonathanRosado/llama-8b-training-on-nebius-example.git
+  ref:
+    branch: gitops-main
+  secretRef:
+    name: flux-gitops-main-auth
+  ignore: |
+    /*
+    !/flux
+    /flux/*
+    !/flux/apps
+    /flux/apps/*
+    !/flux/apps/training
+    !/flux/apps/training/**
+    !/flux/apps/validator
+    !/flux/apps/validator/**
